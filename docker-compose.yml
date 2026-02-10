@@ -1,0 +1,21 @@
+services:
+  DB:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: restaurant_management_system
+    volumes:
+      - pgdata:/var/lib/postgresql/postgresql
+#      - ./DB/initialize.sql:/docker-entrypoint-initdb.d/01-initialize.sql
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:8.4.0-bookworm
+    container_name: rms_cache
+    ports:
+      - "6379:6379"
+
+volumes:
+   pgdata:
