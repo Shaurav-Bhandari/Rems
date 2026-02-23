@@ -9,15 +9,21 @@ import (
 type LoginRequest struct {
     Email    string `json:"email" binding:"required,email"`
     Password string `json:"password" binding:"required,min=8"`
+    DeviceType string `json:"device_type" binding:"omitempty,oneof=web mobile tablet"`
 }
 
 // LoginResponse - Login success
 type LoginResponse struct {
-    Token        string    `json:"token"`
-    RefreshToken string    `json:"refresh_token"`
-    ExpiresAt    time.Time `json:"expires_at"`
-    User         UserInfo  `json:"user"`
-}
+    // Normal login success
+    Token        *string    `json:"token,omitempty"`
+    RefreshToken *string    `json:"refresh_token,omitempty"`
+    ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+    User         *UserInfo  `json:"user,omitempty"`
+
+    // 2FA flow
+    Requires2FA      bool   `json:"requires_2fa"`
+    PendingSessionID string `json:"pending_session_id,omitempty"`
+    Message          string `json:"message,omitempty"`}
 
 type UserInfo struct {
     UserID       uuid.UUID `json:"user_id"`
@@ -31,6 +37,8 @@ type UserInfo struct {
 // RegisterRequest - New user registration
 type RegisterRequest struct {
     Email           string `json:"email" binding:"required,email"`
+    TenantID        uuid.UUID `json:"tenant_id" binding:"required"`
+    UserName        string `json:"user_name" binding:"required,min=3,max=255"`
     Password        string `json:"password" binding:"required,min=8"`
     PasswordConfirm string `json:"password_confirm" binding:"required,eqfield=Password"`
     FullName        string `json:"full_name" binding:"required,min=2,max=255"`
@@ -55,4 +63,10 @@ type ResetPasswordRequest struct {
     Token           string `json:"token" binding:"required"`
     NewPassword     string `json:"new_password" binding:"required,min=8"`
     ConfirmPassword string `json:"confirm_password" binding:"required,eqfield=NewPassword"`
+}
+
+type RegisterResponse struct {
+    UserID     uuid.UUID `json:"user_id"`
+    Email      string    `json:"email"`
+    FullName   string    `json:"full_name"`
 }

@@ -2,20 +2,41 @@ services:
   DB:
     image: postgres:18
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: root
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: restaurant_management_system
     volumes:
-      - pgdata:/var/lib/postgresql/postgresql
-#      - ./DB/initialize.sql:/docker-entrypoint-initdb.d/01-initialize.sql
-    ports:
-      - "5432:5432"
+      - pgdata:/var/lib/postgresql/data
+    # ports: - "5432:5432"  <-- Removed! Only backend needs this internally.
+    networks:
+      - rms_network
+    restart: always
 
   redis:
-    image: redis:8.4.0-bookworm
+    image: redis:7.2-alpine # Using a stable, slim version
     container_name: rms_cache
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    # ports: - "6379:6379"  <-- Removed!
+    networks:
+      - rms_network
+    restart: unless-stopped
+
+  immudb:
+    image: codenotary/immudb:latest
+    container_name: immudb
+    volumes:
+      - ./immudb/data:/var/lib/immudb
     ports:
-      - "6379:6379"
+      - "8080:8080" # Keep this ONLY if you need the Web Console UI
+    environment:
+      - IMMUDB_ADMIN_PASSWORD=${IMMUDB_PASSWORD}
+    networks:
+      - rms_network
+    restart: unless-stopped
+
+networks:
+  rms_network:
+    driver: bridge
 
 volumes:
-   pgdata:
+  pgdata:

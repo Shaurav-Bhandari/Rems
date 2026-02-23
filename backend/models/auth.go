@@ -31,6 +31,14 @@ type PasswordReset struct {
 	Used      bool      `gorm:"not null;default:false"`
 	CreatedAt time.Time `gorm:"not null;default:now()"`
 }
+type PasswordHistory struct {
+    PasswordHistoryID uuid.UUID  `gorm:"type:uuid;primaryKey"`
+    UserID            uuid.UUID  `gorm:"type:uuid;not null;index"`
+    PasswordHash      string     `gorm:"type:varchar(255);not null"`
+    CreatedAt         time.Time  `gorm:"not null;default:now()"`
+    
+    User              User       `gorm:"foreignKey:UserID"`
+}
 
 // BeforeCreate hooks
 func (s *Session) BeforeCreate(tx *gorm.DB) error {
