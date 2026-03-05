@@ -19,8 +19,26 @@ type Role struct {
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 
-	//Relationships
-	Tenant Tenant `gorm:"foreignKey:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
+	// ========== RBAC FIELDS ==========
+
+	// Name is a read-only alias for RoleName — rbac_service.go uses role.Name
+	Name string `gorm:"type:varchar(255);->" json:"name"`
+
+	// IsSystem marks roles that cannot be deleted (superadmin, etc.)
+	IsSystem bool `gorm:"not null;default:false" json:"is_system"`
+
+	// ParentRoleIDs enables role inheritance — resolved recursively by RoleResolver
+	ParentRoleIDs []uuid.UUID `gorm:"type:jsonb;serializer:json" json:"parent_role_ids,omitempty"`
+
+	// Relationships
+	Tenant   Tenant   `gorm:"foreignKey:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
+	Policies []Policy `gorm:"many2many:role_policies;" json:"policies,omitempty"`
+}
+
+// AfterFind syncs Name from RoleName so rbac_service.go can use role.Name
+func (r *Role) AfterFind(tx *gorm.DB) error {
+	r.Name = r.RoleName
+	return nil
 }
 
 // ============================================
@@ -87,27 +105,26 @@ type User struct {
 
 type UserRole struct {
 	UserRoleID uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"user_role_id"`
-	UserID     uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_user_role" json:"user_id"`
-	RoleID     uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_user_role" json:"role_id"`
+	UserID     uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_user_role_tenant" json:"user_id"`
+	RoleID     uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_user_role_tenant" json:"role_id"`
 	AssignedAt time.Time `gorm:"autoCreateTime" json:"assigned_at"`
 
-	//Relationships
+	// ========== RBAC FIELDS ==========
+
+	// TenantID scopes role assignments — rbac_service queries on this
+	TenantID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_user_role_tenant;index" json:"tenant_id"`
+
+	// AssignedBy tracks the actor who granted this role (privilege escalation audit)
+	AssignedBy uuid.UUID `gorm:"type:uuid" json:"assigned_by"`
+
+	// Relationships
 	User User `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	Role Role `gorm:"foreignKey:RoleID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 }
 
 // ============================================
-// NEW: PASSWORD HISTORY MODEL
+// NOTE: PasswordHistory is defined in auth.go
 // ============================================
-
-// type PasswordHistory struct {
-// 	PasswordHistoryID uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"password_history_id"`
-// 	UserID            uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
-// 	PasswordHash      string    `gorm:"type:varchar(255);not null" json:"-"`
-// 	CreatedAt         time.Time `gorm:"autoCreateTime" json:"created_at"`
-
-// 	User User `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
-// }
 
 // ============================================
 // NEW: REFRESH TOKEN MODEL
@@ -237,13 +254,7 @@ func (ur *UserRole) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 // NEW HOOKS
-
-func (ph *PasswordHistory) BeforeCreate(tx *gorm.DB) (err error) {
-	if ph.PasswordHistoryID == uuid.Nil {
-		ph.PasswordHistoryID = uuid.New()
-	}
-	return nil
-}
+// Note: PasswordHistory struct and its BeforeCreate hook live in auth.go
 
 func (rt *RefreshToken) BeforeCreate(tx *gorm.DB) (err error) {
 	if rt.TokenID == uuid.Nil {
