@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+
 	// "math/big"
 	// "net"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"gorm.io/gorm"
 
 	"backend/DTO"
+	"backend/config"
 	"backend/models"
 )
 
@@ -127,89 +129,26 @@ const (
 // ============================================
 
 var (
-	ErrInvalidCredentials  = errors.New("invalid_credentials")
-	ErrAccountLocked       = errors.New("account_locked")
-	ErrAccountInactive     = errors.New("account_inactive")
-	ErrEmailNotVerified    = errors.New("email_not_verified")
-	ErrInvalidToken        = errors.New("invalid_token")
-	ErrExpiredToken        = errors.New("expired_token")
-	ErrSessionNotFound     = errors.New("session_not_found")
-	ErrRateLimitExceeded   = errors.New("rate_limit_exceeded")
-	ErrInvalid2FACode      = errors.New("invalid_2fa_code")
-	ErrSuspiciousActivity  = errors.New("suspicious_activity_detected")
-	ErrMaxSessionsReached  = errors.New("max_sessions_reached")
-	ErrPasswordTooWeak     = errors.New("password_too_weak")
-	ErrPasswordReused      = errors.New("password_recently_used")
-	ErrPasswordBreached    = errors.New("password_found_in_breach")
+	ErrInvalidCredentials = errors.New("invalid_credentials")
+	ErrAccountLocked      = errors.New("account_locked")
+	ErrAccountInactive    = errors.New("account_inactive")
+	ErrEmailNotVerified   = errors.New("email_not_verified")
+	ErrInvalidToken       = errors.New("invalid_token")
+	ErrExpiredToken       = errors.New("expired_token")
+	ErrSessionNotFound    = errors.New("session_not_found")
+	ErrRateLimitExceeded  = errors.New("rate_limit_exceeded")
+	ErrInvalid2FACode     = errors.New("invalid_2fa_code")
+	ErrSuspiciousActivity = errors.New("suspicious_activity_detected")
+	ErrMaxSessionsReached = errors.New("max_sessions_reached")
+	ErrPasswordTooWeak    = errors.New("password_too_weak")
+	ErrPasswordReused     = errors.New("password_recently_used")
+	ErrPasswordBreached   = errors.New("password_found_in_breach")
 )
 
 // ============================================
-// TOKEN TTL CONFIG
+// TOKEN TTL CONFIG — types moved to config/immudb_vault.go
+// Use config.TokenTTLConfig and config.TokenDuration.
 // ============================================
-
-type TokenTTLConfig struct {
-	ByRole   map[string]TokenDuration
-	ByDevice map[string]TokenDuration
-	Default  TokenDuration
-}
-
-type TokenDuration struct {
-	AccessToken  time.Duration
-	RefreshToken time.Duration
-}
-
-func getTokenTTLConfig() *TokenTTLConfig {
-	return &TokenTTLConfig{
-		ByRole: map[string]TokenDuration{
-			"admin": {
-				AccessToken:  15 * time.Minute,
-				RefreshToken: 2 * time.Hour,
-			},
-			"manager": {
-				AccessToken:  20 * time.Minute,
-				RefreshToken: 4 * time.Hour,
-			},
-			"cashier": {
-				AccessToken:  2 * time.Hour,
-				RefreshToken: 8 * time.Hour,
-			},
-			"chef": {
-				AccessToken:  8 * time.Hour,
-				RefreshToken: 24 * time.Hour,
-			},
-			"waiter": {
-				AccessToken:  4 * time.Hour,
-				RefreshToken: 12 * time.Hour,
-			},
-			"customer": {
-				AccessToken:  7 * 24 * time.Hour,
-				RefreshToken: 90 * 24 * time.Hour,
-			},
-		},
-		ByDevice: map[string]TokenDuration{
-			"kds": {
-				AccessToken:  24 * time.Hour,
-				RefreshToken: 7 * 24 * time.Hour,
-			},
-			"pos": {
-				AccessToken:  8 * time.Hour,
-				RefreshToken: 24 * time.Hour,
-			},
-			"mobile_app": {
-				AccessToken:  7 * 24 * time.Hour,
-				RefreshToken: 90 * 24 * time.Hour,
-			},
-			"web": {
-				AccessToken:  1 * time.Hour,
-				RefreshToken: 7 * 24 * time.Hour,
-			},
-		},
-		Default: TokenDuration{
-			AccessToken:  1 * time.Hour,
-			RefreshToken: 24 * time.Hour,
-		},
-	}
-}
 
 // ============================================
 // TYPED SESSION DATA (Improvement #33)
@@ -844,7 +783,7 @@ type AuthService struct {
 	db           *gorm.DB
 	redis        *redis.Client
 	jwtSecretKey string
-	ttlConfig    *TokenTTLConfig
+	ttlConfig    *config.TokenTTLConfig
 
 	// Domain services
 	tokenService    *TokenService
@@ -855,32 +794,38 @@ type AuthService struct {
 	emailService    *EmailService
 	geoIPService    *GeoIPService
 
-	// Configuration
+	// Configuration — loaded from ImmuDB vault
 	maxSessions       int
 	maxFailedLogins   int
 	lockoutDuration   time.Duration
 	passwordMinLength int
 	passwordHistory   int
+	rateLimitCount    int
+	rateLimitWindow   time.Duration
 }
 
+// NewAuthService creates an AuthService with config loaded from ImmuDB vault.
+// All magic numbers are sourced from authCfg and ttlCfg.
 func NewAuthService(
 	db *gorm.DB,
-	redis *redis.Client,
+	redisClient *redis.Client,
 	jwtSecret string,
+	authCfg *config.AuthServiceConfig,
+	ttlCfg *config.TokenTTLConfig,
 	emailService *EmailService,
 	geoIPService *GeoIPService,
 ) *AuthService {
-	tokenService := NewTokenService(jwtSecret, redis)
-	sessionService := NewSessionService(redis)
-	passwordService := NewPasswordService(db, 12, 5)
-	securityService := NewSecurityService(db, redis, geoIPService)
+	tokenService := NewTokenService(jwtSecret, redisClient)
+	sessionService := NewSessionService(redisClient)
+	passwordService := NewPasswordService(db, authCfg.PasswordMinLength, authCfg.PasswordHistory)
+	securityService := NewSecurityService(db, redisClient, geoIPService)
 	deviceService := NewDeviceService(db)
 
 	return &AuthService{
 		db:                db,
-		redis:             redis,
+		redis:             redisClient,
 		jwtSecretKey:      jwtSecret,
-		ttlConfig:         getTokenTTLConfig(),
+		ttlConfig:         ttlCfg,
 		tokenService:      tokenService,
 		sessionService:    sessionService,
 		passwordService:   passwordService,
@@ -888,11 +833,13 @@ func NewAuthService(
 		deviceService:     deviceService,
 		emailService:      emailService,
 		geoIPService:      geoIPService,
-		maxSessions:       5,
-		maxFailedLogins:   5,
-		lockoutDuration:   30 * time.Minute,
-		passwordMinLength: 12,
-		passwordHistory:   5,
+		maxSessions:       authCfg.MaxSessions,
+		maxFailedLogins:   authCfg.MaxFailedLogins,
+		lockoutDuration:   authCfg.LockoutDuration,
+		passwordMinLength: authCfg.PasswordMinLength,
+		passwordHistory:   authCfg.PasswordHistory,
+		rateLimitCount:    authCfg.RateLimitCount,
+		rateLimitWindow:   authCfg.RateLimitWindow,
 	}
 }
 
@@ -937,17 +884,17 @@ func (s *AuthService) Register(
 
 	// Create user
 	user := models.User{
-		UserID:       uuid.New(),
-		TenantID:     req.TenantID,
-		UserName:     req.UserName,
-		FullName:     req.FullName,
-		Email:        strings.ToLower(req.Email),
-		PasswordHash: passwordHash,
-		Phone:        req.Phone,
-		IsActive:     true,
+		UserID:          uuid.New(),
+		TenantID:        req.TenantID,
+		UserName:        req.UserName,
+		FullName:        req.FullName,
+		Email:           strings.ToLower(req.Email),
+		PasswordHash:    passwordHash,
+		Phone:           req.Phone,
+		IsActive:        true,
 		IsEmailVerified: false, // IMPROVEMENT #10
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 
 	// IMPROVEMENT #16: Transaction
@@ -1445,7 +1392,7 @@ func (s *AuthService) createAuthTokensWithTTL(
 	ctx context.Context,
 	user *models.User,
 	ipAddress, userAgent, deviceFingerprint, deviceType string,
-	ttl TokenDuration,
+	ttl config.TokenDuration,
 ) (*DTO.LoginResponse, error) {
 	sessionID := uuid.New().String()
 
@@ -1525,7 +1472,7 @@ func (s *AuthService) createAuthTokensWithTTL(
 	}, nil
 }
 
-func (s *AuthService) determineTokenTTL(userRole, deviceType string) TokenDuration {
+func (s *AuthService) determineTokenTTL(userRole, deviceType string) config.TokenDuration {
 	if ttl, exists := s.ttlConfig.ByRole[userRole]; exists {
 		return ttl
 	}

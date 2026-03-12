@@ -1,0 +1,321 @@
+# ReMS Full-Stack: ImmuDB Vault, Route API, Redis Sessions, Handlers & Svelte Frontend
+
+This plan covers migrating hardcoded PII/config to ImmuDB, wiring all backend routes+handlers+middleware, verifying Redis session management, and creating a Svelte frontend. Everything is intentionally over-engineered with layered services and middleware.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Scope is large.** This plan touches ~25+ new files and modifies ~5 existing files across backend and frontend. I recommend we implement it in phases, with a checkpoint after each.
+
+> [!WARNING]
+> **ImmuDB gRPC dependency**: The `codenotary/immudb` Go client uses gRPC. The existing [go.mod](file:///c:/projects/ReMS/backend/go.mod) already has it. If ImmuDB isn't running, the app will start with a warning and fall back to env vars.
+
+> [!CAUTION]
+> **JWT_SECRET in ImmuDB**: The JWT signing key will be read from ImmuDB at startup. If ImmuDB is unreachable, the fallback insecure default from env will be used. Ensure ImmuDB is running in production.
+
+---
+
+## Proposed Changes
+
+### Phase 1: ImmuDB Config Vault
+
+Migrate all hardcoded PII and config values (TTLs, JWT keys, rate limits, password policies) to ImmuDB as an immutable config vault.
+
+---
+
+#### [NEW] [immudb_vault.go](file:///c:/projects/ReMS/backend/config/immudb_vault.go)
+
+ImmuDB client wrapper with:
+- `ImmuVault` struct holding `*immuclient.ImmuClient`
+- `NewImmuVault(host, port, user, pass, db string)` — connects & logs in
+- `SeedDefaults(ctx)` — idempotent seeder that writes default config keys if they don't exist yet
+- `GetString(ctx, key)` / `GetInt(ctx, key)` / `GetDuration(ctx, key)` — typed readers
+- `SetConfig(ctx, key, value)` — write a config value (for admin API later)
+- `GetAuthConfig(ctx) (*AuthConfig, error)` — reads all auth-related keys into a struct
+- `GetTokenTTLConfig(ctx) (*TokenTTLConfig, error)` — reads role/device TTL map
+- `Close()` — graceful shutdown
+
+Config keys to seed:
+| Key | Default | Category |
+|-----|---------|----------|
+| `auth.max_sessions` | 5 | auth |
+| `auth.max_failed_logins` | 5 | auth |
+| `auth.lockout_duration_minutes` | 30 | auth |
+| `auth.password_min_length` | 12 | auth |
+| `auth.password_history_count` | 5 | auth |
+| `auth.rate_limit_count` | 10 | auth |
+| `auth.rate_limit_window_seconds` | 60 | auth |
+| `jwt.secret` | (generated UUID) | jwt |
+| `jwt.issuer` | rms-auth | jwt |
+| `jwt.audience` | rms-api | jwt |
+| `ttl.access.admin` | 15m | ttl |
+| `ttl.refresh.admin` | 2h | ttl |
+| `ttl.access.manager` | 20m | ttl |
+| `ttl.refresh.manager` | 4h | ttl |
+| `ttl.access.default` | 1h | ttl |
+| `ttl.refresh.default` | 24h | ttl |
+| `redis.session_ttl_seconds` | 3600 | redis |
+| `cors.allowed_origins` | * | cors |
+| `app.port` | 3000 | app |
+
+---
+
+#### [MODIFY] [auth.go](file:///c:/projects/ReMS/backend/services/core/auth.go)
+
+- Add `AuthServiceConfig` struct that replaces magic numbers
+- Modify [NewAuthService](file:///c:/projects/ReMS/backend/services/core/auth.go#866-898) to accept `*AuthServiceConfig` instead of hardcoded values
+- Replace [getTokenTTLConfig()](file:///c:/projects/ReMS/backend/services/core/auth.go#161-213) to accept a `*TokenTTLConfig` parameter loaded from ImmuDB
+- Remove hardcoded values at lines 163-211 (role/device TTL map), 826 ([NewPasswordService(db, 12, 5)](file:///c:/projects/ReMS/backend/services/core/auth.go#450-457)), 842-846 (auth struct init)
+
+---
+
+#### [MODIFY] [main.go](file:///c:/projects/ReMS/backend/main.go)
+
+- Initialize ImmuDB vault on startup
+- Initialize Redis client
+- Load all config from ImmuDB vault
+- Pass config to service constructors
+- Register all routes
+
+---
+
+### Phase 2: Route API, Middleware Chains & Handlers
+
+Create the full route tree with over-engineered middleware stacks per route group.
+
+---
+
+#### [NEW] [routes.go](file:///c:/projects/ReMS/backend/routes/routes.go)
+
+Central route registration function `RegisterRoutes(app *fiber.App, deps *Dependencies)`. The `Dependencies` struct holds all service instances and middleware config.
+
+Route tree:
+```
+/api/V1/
+├── auth/
+│   ├── POST   /login
+│   ├── POST   /register
+│   ├── POST   /logout
+│   ├── POST   /refresh
+│   ├── POST   /forgot-password
+│   ├── POST   /reset-password
+│   ├── POST   /change-password      [Auth]
+│   ├── GET    /sessions              [Auth]
+│   ├── DELETE /sessions/:id          [Auth]
+│   └── POST   /verify-2fa
+│
+├── users/                             [Auth, RBAC, Tenant]
+│   ├── GET    /
+│   ├── GET    /:id
+│   ├── PUT    /:id
+│   └── DELETE /:id
+│
+├── restaurants/                       [Auth, RBAC, Tenant]
+│   ├── GET    /
+│   ├── POST   /
+│   ├── GET    /:id
+│   ├── PUT    /:id
+│   └── DELETE /:id
+│
+├── orders/                            [Auth, RBAC, Tenant]
+│   ├── GET    /
+│   ├── POST   /
+│   ├── GET    /:id
+│   ├── PUT    /:id/status
+│   └── DELETE /:id
+│
+├── menu/                              [Auth, RBAC, Tenant]
+│   ├── GET    /categories
+│   ├── POST   /categories
+│   ├── GET    /items
+│   ├── POST   /items
+│   ├── PUT    /items/:id
+│   └── DELETE /items/:id
+│
+├── inventory/                         [Auth, RBAC, Tenant]
+│   ├── GET    /
+│   ├── POST   /
+│   ├── PUT    /:id
+│   ├── POST   /:id/adjust
+│   └── DELETE /:id
+│
+├── analytics/                         [Auth, RBAC, Tenant, Cache]
+│   ├── GET    /revenue/overview
+│   ├── GET    /revenue/trend
+│   ├── GET    /orders/volume
+│   ├── GET    /orders/status
+│   ├── GET    /menu/top-items
+│   ├── GET    /inventory/turnover
+│   └── GET    /forecast/demand
+│
+└── health/
+    ├── GET    /
+    ├── GET    /redis
+    └── GET    /immudb
+```
+
+Middleware chains per group:
+- **Public** (`/auth/login`, `/auth/register`, `/health`): RequestID → Logger → RateLimit → CORS → Recovery → SecurityHeaders
+- **Authenticated**: Public + Auth → Tenant → Timeout
+- **Admin**: Authenticated + RBAC(admin) → Validator
+- **Analytics**: Authenticated + Cache
+
+---
+
+#### [NEW] [auth.go](file:///c:/projects/ReMS/backend/handlers/auth.go)
+
+Handler struct with injected services:
+```go
+type AuthHandler struct {
+    authService     *services.AuthService
+    sessionService  *services.SessionService
+    tokenService    *services.TokenService
+    securityService *services.SecurityService
+    deviceService   *services.DeviceService
+    vault           *config.ImmuVault
+}
+```
+
+Methods:
+- [Login(c fiber.Ctx)](file:///c:/projects/ReMS/backend/services/core/auth.go#1000-1122) — validate credentials, check lockout, risk score, 2FA, create session in Redis, return tokens
+- [Register(c fiber.Ctx)](file:///c:/projects/ReMS/backend/services/core/auth.go#903-995) — validate input, hash password, create user + tenant, log security event
+- `Logout(c fiber.Ctx)` — revoke session from Redis, blacklist access token
+- [RefreshToken(c fiber.Ctx)](file:///c:/projects/ReMS/backend/models/user.go#133-155) — validate refresh token, rotate, issue new pair
+- [ChangePassword(c fiber.Ctx)](file:///c:/projects/ReMS/backend/services/core/auth.go#1127-1211) — validate current, check history, update
+- [ForgotPassword(c fiber.Ctx)](file:///c:/projects/ReMS/backend/DTO/auth.go#57-60) — generate reset token, store in DB
+- [ResetPassword(c fiber.Ctx)](file:///c:/projects/ReMS/backend/DTO/auth.go#62-67) — validate token, update password
+- [ListSessions(c fiber.Ctx)](file:///c:/projects/ReMS/backend/DTO/RedisCache.go#195-201) — list user's active Redis sessions
+- [RevokeSession(c fiber.Ctx)](file:///c:/projects/ReMS/backend/services/core/auth.go#425-437) — revoke specific session
+- [Verify2FA(c fiber.Ctx)](file:///c:/projects/ReMS/backend/services/core/auth.go#1314-1405) — validate TOTP code
+
+---
+
+#### [NEW] [restaurant.go](file:///c:/projects/ReMS/backend/handlers/restaurant.go)
+
+`RestaurantHandler` with injected services, CRUD methods delegating to existing [services/business/settings.go](file:///c:/projects/ReMS/backend/services/business/settings.go). Each handler: parse request → authorize via [AuthContext](file:///c:/projects/ReMS/backend/DTO/Redis_auth.go#40-54) → call service → return `utils.SendResponse`.
+
+---
+
+#### [NEW] [order.go](file:///c:/projects/ReMS/backend/handlers/order.go)
+
+`OrderHandler` — CRUD + `UpdateStatus` (drives the existing OrderFSM).
+
+---
+
+#### [NEW] [menu.go](file:///c:/projects/ReMS/backend/handlers/menu.go)
+
+`MenuHandler` — Category CRUD + MenuItem CRUD.
+
+---
+
+#### [NEW] [inventory.go](file:///c:/projects/ReMS/backend/handlers/inventory.go)
+
+`InventoryHandler` — CRUD + `AdjustStock` + `DeductForOrder`.
+
+---
+
+#### [NEW] [user.go](file:///c:/projects/ReMS/backend/handlers/user.go)
+
+`UserHandler` — List, Get, Update, Delete users (admin routes).
+
+---
+
+#### [NEW] [analytics.go](file:///c:/projects/ReMS/backend/handlers/analytics.go)
+
+`AnalyticsHandler` — delegates to `AnalyticsService` and `ForecastService`.
+
+---
+
+#### [NEW] [health.go](file:///c:/projects/ReMS/backend/handlers/health.go)
+
+`HealthHandler` — `/health` returns ok, `/health/redis` pings Redis, `/health/immudb` pings ImmuDB.
+
+---
+
+### Phase 3: Redis Session Verification
+
+---
+
+#### [NEW] [redis_health.go](file:///c:/projects/ReMS/backend/services/core/redis_health.go)
+
+`RedisHealthService` with:
+- `Ping(ctx)` — `redis.Ping()` 
+- `GetStats(ctx)` — returns key count, memory, uptime
+- `VerifySessionIntegrity(ctx, userID)` — checks session keys match the user's session set, cleans orphans
+
+---
+
+#### [NEW] [redis.go](file:///c:/projects/ReMS/backend/config/redis.go)
+
+`NewRedisClient(host, port, password string, db int) *redis.Client` — centralized Redis client factory.
+
+---
+
+### Phase 4: Svelte Frontend
+
+---
+
+#### [NEW] `frontend/` directory (SvelteKit project)
+
+Initialize with `npx -y sv create ./` in non-interactive mode.
+
+Key pages and components:
+
+| Path | Description |
+|------|-------------|
+| `src/routes/login/+page.svelte` | Login form with 2FA support |
+| `src/routes/register/+page.svelte` | Registration form |
+| `src/routes/(app)/+layout.svelte` | Authenticated layout with sidebar/navbar |
+| `src/routes/(app)/dashboard/+page.svelte` | Main dashboard with KPI cards |
+| `src/routes/(app)/restaurants/+page.svelte` | Restaurant list + CRUD |
+| `src/routes/(app)/orders/+page.svelte` | Order management |
+| `src/routes/(app)/menu/+page.svelte` | Menu management |
+| `src/routes/(app)/inventory/+page.svelte` | Inventory management |
+| `src/routes/(app)/analytics/+page.svelte` | Analytics dashboard |
+| `src/routes/(app)/settings/+page.svelte` | User settings |
+| `src/lib/api/client.ts` | Fetch wrapper with auth interceptor + token refresh |
+| `src/lib/stores/auth.ts` | Svelte store for auth state |
+| `src/lib/components/` | Reusable UI components (DataTable, Modal, Chart, etc.) |
+
+**Design**: Dark theme with glassmorphism, Inter font, vibrant accent colors, smooth transitions.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+1. **Go Build Check** — verify everything compiles:
+   ```bash
+   cd c:\projects\ReMS\backend && go build ./...
+   ```
+
+2. **ImmuDB Vault Unit Test** — create `config/immudb_vault_test.go`:
+   - Test `SeedDefaults` is idempotent
+   - Test `GetString/GetInt/GetDuration` return correct values
+   - Requires ImmuDB running (`docker compose up immudb`)
+
+3. **Handler Integration Test** — use `httptest` to verify:
+   - `/api/V1/health` returns 200
+   - `/api/V1/auth/login` with bad creds returns 401
+   - Protected routes without token return 401
+
+4. **Svelte Build Check**:
+   ```bash
+   cd c:\projects\ReMS\frontend && npm run build
+   ```
+
+### Manual Verification
+
+1. **Start infrastructure**: `docker compose up -d` (Postgres, Redis, ImmuDB)
+2. **Start backend**: `cd backend && go run .` — verify startup logs show ImmuDB connected, Redis connected, all routes registered
+3. **Start frontend**: `cd frontend && npm run dev` — verify login page renders
+4. **End-to-end flow**: Register a user → Login → See dashboard → Navigate to restaurants/orders → Logout
+5. **Redis verification**: After login, check Redis for session keys:
+   ```bash
+   docker exec rms_cache redis-cli -a roote KEYS "session:*"
+   ```
+6. **ImmuDB verification**: Check seeded config:
+   ```bash
+   docker exec immudb immuadmin login immudb --password rooter
+   ```
