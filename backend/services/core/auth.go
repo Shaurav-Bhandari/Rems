@@ -750,16 +750,7 @@ func parseDeviceName(userAgent string) string {
 	return fmt.Sprintf("%s on %s", browser, os)
 }
 
-// ============================================
-// EMAIL SERVICE
-// ============================================
 
-type EmailService struct{}
-
-func (e *EmailService) SendVerificationEmail(email, name, token string)                   {}
-func (e *EmailService) SendPasswordChangedNotification(email, name, ip string)            {}
-func (e *EmailService) SendAccountLockedNotification(email, name string, until time.Time) {}
-func (e *EmailService) SendSuspiciousLoginAlert(email, name, ip, location string)         {}
 
 // ============================================
 // GEOIP SERVICE (Improvement #6)
@@ -1152,6 +1143,88 @@ func (s *AuthService) ChangePassword(
 
 	// Send email
 	go s.emailService.SendPasswordChangedNotification(user.Email, user.FullName, ipAddress)
+
+	return nil
+}
+
+// ============================================
+// RESET PASSWORD (from forgot-password flow)
+// ============================================
+
+func (s *AuthService) ResetPassword(
+	ctx context.Context,
+	email string,
+	newPassword string,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Find user by email
+	var user models.User
+	if err := s.db.WithContext(ctx).Where("email = ?", strings.ToLower(email)).First(&user).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Validate new password
+	if err := s.passwordService.ValidatePasswordStrength(newPassword); err != nil {
+		return err
+	}
+
+	// Check breach
+	breached, err := s.passwordService.CheckPasswordBreach(newPassword)
+	if err != nil {
+		return err
+	}
+	if breached {
+		return ErrPasswordBreached
+	}
+
+	// Check password history
+	if err := s.passwordService.CheckPasswordHistory(user.UserID, newPassword); err != nil {
+		return err
+	}
+
+	// Hash with HashPwd
+	newHash, err := HashPwd(newPassword)
+	if err != nil {
+		return err
+	}
+
+	// Transaction: update password + save history
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&user).Updates(map[string]interface{}{
+			"password_hash":       newHash,
+			"password_changed_at": time.Now(),
+		}).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Create(&models.PasswordHistory{
+			PasswordHistoryID: uuid.New(),
+			UserID:            user.UserID,
+			PasswordHash:      newHash,
+			CreatedAt:         time.Now(),
+		}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// Revoke all sessions
+	s.sessionService.RevokeAllUserSessions(ctx, user.UserID)
+	s.revokeAllRefreshTokens(ctx, user.UserID, "password_reset")
+
+	// Log event
+	s.securityService.LogSecurityEvent(ctx, &user.UserID, EventPasswordChanged, SeverityInfo, "", "", true, map[string]interface{}{
+		"reason": "password_reset",
+	})
+
+	// Send notification
+	go s.emailService.SendPasswordChangedNotification(user.Email, user.FullName, "password-reset")
 
 	return nil
 }

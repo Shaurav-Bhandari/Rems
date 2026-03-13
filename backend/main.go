@@ -5,6 +5,7 @@ import (
 	"backend/config"
 	"backend/routes"
 	services "backend/services/core"
+	"backend/services/printing"
 	"context"
 	"fmt"
 	"log"
@@ -95,13 +96,20 @@ func main() {
 	}
 
 	// ── Initialize services ──────────────────────────────────
-	emailService := &services.EmailService{}
+	emailCfg := services.LoadEmailConfig()
+	emailService := services.NewEmailService(emailCfg)
 	geoIPService := &services.GeoIPService{}
 
 	authService := services.NewAuthService(db, redisClient, jwtSecret, authCfg, ttlCfg, emailService, geoIPService)
 	sessionService := services.NewSessionService(redisClient)
 	tokenService := services.NewTokenService(jwtSecret, redisClient)
 	securityService := services.NewSecurityService(db, redisClient, geoIPService)
+
+	// ── Initialize printer ──────────────────────────────────
+	printerCfg := config.LoadPrinterConfig()
+	printerService := printing.NewPrinterService(printerCfg)
+	log.Printf("✓ Printer configured: type=%s address=%s paper=%dmm",
+		printerCfg.Type, printerCfg.Address, printerCfg.PaperWidth)
 
 	// ── Create Fiber app ─────────────────────────────────────
 	app := fiber.New(fiber.Config{
@@ -117,6 +125,7 @@ func main() {
 		SessionService:  sessionService,
 		TokenService:    tokenService,
 		SecurityService: securityService,
+		PrinterService:  printerService,
 	}
 	routes.RegisterRoutes(app, deps)
 

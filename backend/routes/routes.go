@@ -5,6 +5,7 @@ import (
 	"backend/handlers"
 	"backend/middleware"
 	services "backend/services/core"
+	"backend/services/printing"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/redis/go-redis/v9"
@@ -20,6 +21,7 @@ type Dependencies struct {
 	SessionService  *services.SessionService
 	TokenService    *services.TokenService
 	SecurityService *services.SecurityService
+	PrinterService  *printing.PrinterService
 }
 
 // RegisterRoutes wires all route groups with middleware chains.
@@ -41,6 +43,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	userH := handlers.NewUserHandler(deps.DB)
 	analyticsH := handlers.NewAnalyticsHandler(deps.DB)
 	healthH := handlers.NewHealthHandler(deps.Redis, deps.Vault)
+	receiptH := handlers.NewReceiptHandler(deps.DB, deps.PrinterService)
 
 	// ── Global middleware (applied to ALL routes) ─────────────
 	app.Use(middleware.RequestID())
@@ -128,4 +131,10 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	analytics.Get("/menu/top-items", analyticsH.TopSellingItems)
 	analytics.Get("/inventory/turnover", analyticsH.InventoryTurnover)
 	analytics.Get("/forecast/demand", analyticsH.ForecastDemand)
+
+	// Receipts / Printing
+	receipts := authenticated.Group("/receipts")
+	receipts.Post("/print", receiptH.PrintReceipt)
+	receipts.Get("/test", receiptH.TestPrinter)
+	receipts.Get("/config", receiptH.PrinterConfig)
 }
