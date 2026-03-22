@@ -39,7 +39,7 @@ type LoggerConfig struct {
 func DefaultLoggerConfig() LoggerConfig {
 	return LoggerConfig{
 		SlowRequestThreshold: 2 * time.Second,
-		SkipPaths:            []string{"/api/V1/health", "/api/V1/ping"},
+		SkipPaths:            []string{"/api/v1/health", "/api/v1/ping"},
 		RedactedFields: []string{
 			"password", "password_confirm", "current_password",
 			"new_password", "confirm_password", "token",

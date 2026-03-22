@@ -76,7 +76,7 @@
 		{/if}
 
 		{#if !show2FA}
-			<form on:submit|preventDefault={handleLogin}>
+			<form onsubmit={(e) => { e.preventDefault(); handleLogin(); }}>
 				<div class="mb-3">
 					<label for="email" class="form-label fw-medium" style="font-size: 0.85rem;">Email Address</label>
 					<div class="input-group">
@@ -133,7 +133,7 @@
 				</p>
 			</form>
 		{:else}
-			<form on:submit|preventDefault={handle2FA}>
+			<form onsubmit={(e) => { e.preventDefault(); handle2FA(); }}>
 				<div class="text-center mb-3">
 					<div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
 						style="width: 60px; height: 60px; background: rgba(248, 112, 96, 0.1);">
@@ -162,7 +162,7 @@
 					Verify
 				</button>
 
-				<button type="button" class="btn btn-outline-secondary w-100" on:click={() => { show2FA = false; twoFACode = ''; }}>
+				<button type="button" class="btn btn-outline-secondary w-100" onclick={() => { show2FA = false; twoFACode = ''; }}>
 					Back to Login
 				</button>
 			</form>

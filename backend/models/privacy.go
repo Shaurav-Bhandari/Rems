@@ -25,10 +25,10 @@ type DataPrivacyRecord struct {
 	PaymentDataRetentionDays     *int       `gorm:"type:int" json:"payment_data_retention_days"`
 	AuditLogRetentionDays        *int       `gorm:"type:int" json:"audit_log_retention_days"`
 	BackupRetentionDays          *int       `gorm:"type:int" json:"backup_retention_days"`
-	DataCategories               JSONB      `gorm:"type:jsonb;default:'[]'" json:"data_categories"`
-	ProcessingPurposes           JSONB      `gorm:"type:jsonb;default:'[]'" json:"processing_purposes"`
-	DataRecipients               JSONB      `gorm:"type:jsonb;default:'[]'" json:"data_recipients"`
-	InternationalTransfers       JSONB      `gorm:"type:jsonb;default:'[]'" json:"international_transfers"`
+	DataCategories         JSONB `gorm:"type:jsonb;default:'{}'" json:"data_categories"`
+	ProcessingPurposes     JSONB `gorm:"type:jsonb;default:'{}'" json:"processing_purposes"`
+	DataRecipients         JSONB `gorm:"type:jsonb;default:'{}'" json:"data_recipients"`
+	InternationalTransfers JSONB `gorm:"type:jsonb;default:'{}'" json:"international_transfers"`
 	CreatedAt                    time.Time  `gorm:"default:now()" json:"created_at"`
 	UpdatedAt                    *time.Time `gorm:"default:now()" json:"updated_at"`
 

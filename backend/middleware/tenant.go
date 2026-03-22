@@ -52,9 +52,9 @@ type TenantIsolationConfig struct {
 func DefaultTenantIsolationConfig() TenantIsolationConfig {
 	return TenantIsolationConfig{
 		SkipPaths: []string{
-			"/api/V1/auth",
-			"/api/V1/health",
-			"/api/V1/ping",
+			"/api/v1/auth",
+			"/api/v1/health",
+			"/api/v1/ping",
 		},
 		AllowCrossTenantRoles: []string{DTO.RoleSuperAdmin},
 		EnforceTenantHeader:   false,

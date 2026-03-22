@@ -110,6 +110,11 @@ func getAllModels() []interface{} {
 		&models.UserRole{},
 		&models.Session{},
 		&models.PasswordReset{},
+		&models.RefreshToken{},
+		&models.DeviceRegistry{},
+		&models.SecurityEvent{},
+		&models.EmailVerificationToken{},
+		&models.PasswordResetToken{},
 		
 		// Employees
 		&models.Employee{},
@@ -167,6 +172,31 @@ func getAllModels() []interface{} {
 		&models.DataSubjectRequest{},
 		&models.DataAccessControl{},
 		&models.DataArchiveSetting{},
+		// Inventory extensions (inventory_ext.go)
+&models.StockMovement{},
+&models.MenuItemInventoryLink{},
+
+// Order extensions (orderExtension.go)
+&models.OrderTaxBreakdown{},
+&models.OutboxEvent{},
+
+// RBAC (rbac.go)
+&models.Policy{},
+&models.Permission{},
+&models.RolePolicy{},
+&models.RBACEvent{},
+
+// Tenant Settings & Profiles (tenantSetting.go)
+&models.RestaurantProfile{},
+&models.UserProfile{},
+&models.TenantSetting{},
+&models.SettingOverride{},
+&models.ElevationToken{},
+&models.SettingAuditLog{},
+
+// Auth extras (auth.go)
+&models.PasswordHistory{},
+&models.Admin{},
 	}
 }
 

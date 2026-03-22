@@ -41,7 +41,7 @@ type AuthConfig struct {
 	RedisClient *redis.Client
 
 	// SkipPaths are routes that do not require authentication.
-	// Supports prefix matching (e.g. "/api/V1/auth" matches "/api/V1/auth/login").
+	// Supports prefix matching (e.g. "/api/v1/auth" matches "/api/v1/auth/login").
 	SkipPaths []string
 
 	// TokenExpGracePeriod allows tokens within this duration past expiry
@@ -62,13 +62,13 @@ func DefaultAuthConfig() AuthConfig {
 	return AuthConfig{
 		JWTSecret: os.Getenv("JWT_SECRET"),
 		SkipPaths: []string{
-			"/api/V1/auth/login",
-			"/api/V1/auth/register",
-			"/api/V1/auth/forgot-password",
-			"/api/V1/auth/reset-password",
-			"/api/V1/auth/verify-email",
-			"/api/V1/health",
-			"/api/V1/ping",
+			"/api/v1/auth/login",
+			"/api/v1/auth/register",
+			"/api/v1/auth/forgot-password",
+			"/api/v1/auth/reset-password",
+			"/api/v1/auth/verify-email",
+			"/api/v1/health",
+			"/api/v1/ping",
 		},
 		TokenExpGracePeriod:    30 * time.Second,
 		EnableDeviceValidation: true,
@@ -96,7 +96,7 @@ func Auth(redisClient *redis.Client) fiber.Handler {
 // AuthWithConfig returns JWT authentication middleware with custom config.
 func AuthWithConfig(cfg AuthConfig) fiber.Handler {
 	if cfg.JWTSecret == "" {
-		cfg.JWTSecret = "CHANGE_ME_IN_PRODUCTION_PLEASE" // Fail-safe default
+		cfg.JWTSecret = "CHANGE_ME_IN_PRODUCTION" // Fail-safe default
 		log.Println("[WARN] JWT_SECRET not set — using insecure default. Set JWT_SECRET in .env!")
 	}
 

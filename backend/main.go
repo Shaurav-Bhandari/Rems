@@ -4,6 +4,7 @@ import (
 	"backend/DB"
 	"backend/config"
 	"backend/routes"
+	"backend/services/business"
 	services "backend/services/core"
 	"backend/services/printing"
 	"context"
@@ -105,6 +106,12 @@ func main() {
 	tokenService := services.NewTokenService(jwtSecret, redisClient)
 	securityService := services.NewSecurityService(db, redisClient, geoIPService)
 
+	// ── Initialize payment service ───────────────────────────
+	// fonepayProvider is nil until Fonepay credentials are configured.
+	// QR endpoints will return ErrPaymentNotFonepay; cash/card work immediately.
+	paymentService := business.NewPaymentService(db, redisClient, nil, nil)
+	log.Println("✓ Payment service initialized")
+
 	// ── Initialize printer ──────────────────────────────────
 	printerCfg := config.LoadPrinterConfig()
 	printerService := printing.NewPrinterService(printerCfg)
@@ -126,6 +133,8 @@ func main() {
 		TokenService:    tokenService,
 		SecurityService: securityService,
 		PrinterService:  printerService,
+		PaymentService:  paymentService,
+		JWTSecret:       jwtSecret,
 	}
 	routes.RegisterRoutes(app, deps)
 

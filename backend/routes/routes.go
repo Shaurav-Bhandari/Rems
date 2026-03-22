@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/handlers"
 	"backend/middleware"
+	"backend/services/business"
 	services "backend/services/core"
 	"backend/services/printing"
 
@@ -22,6 +23,8 @@ type Dependencies struct {
 	TokenService    *services.TokenService
 	SecurityService *services.SecurityService
 	PrinterService  *printing.PrinterService
+	PaymentService  *business.PaymentService
+	JWTSecret       string
 }
 
 // RegisterRoutes wires all route groups with middleware chains.
@@ -44,6 +47,9 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	analyticsH := handlers.NewAnalyticsHandler(deps.DB)
 	healthH := handlers.NewHealthHandler(deps.Redis, deps.Vault)
 	receiptH := handlers.NewReceiptHandler(deps.DB, deps.PrinterService)
+	paymentH := handlers.NewPaymentHandler(deps.PaymentService)
+	initH := handlers.NewInitializeHandler(deps.DB)
+	adminH := handlers.NewAdminHandler(deps.DB)
 
 	// ── Global middleware (applied to ALL routes) ─────────────
 	app.Use(middleware.RequestID())
@@ -59,6 +65,12 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	health.Get("/redis", healthH.RedisHealth)
 	health.Get("/immudb", healthH.ImmuDBHealth)
 
+	// ── Initialize (public, idempotent) ───────────────────────
+	api.Post("/initialize", initH.Initialize)
+	api.Post("/initialize/superadmin", initH.InitializeSuperadmin)
+	api.Post("/initialize/roles", initH.AddRole)
+	api.Post("/initialize/users", initH.AddUser)
+
 	// ── Auth (public + some authenticated) ───────────────────
 	auth := api.Group("/auth")
 	auth.Post("/login", authH.Login)
@@ -68,8 +80,14 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	auth.Post("/reset-password", authH.ResetPassword)
 	auth.Post("/verify-2fa", authH.Verify2FA)
 
+	// ── Auth Middleware ──────────────────────────────────────
+	authCfg := middleware.DefaultAuthConfig()
+	authCfg.JWTSecret = deps.JWTSecret
+	authCfg.RedisClient = deps.Redis
+	authMid := middleware.AuthWithConfig(authCfg)
+
 	// Auth-protected auth routes
-	authProtected := auth.Group("", middleware.Auth(deps.Redis))
+	authProtected := auth.Group("", authMid)
 	authProtected.Post("/logout", authH.Logout)
 	authProtected.Post("/change-password", authH.ChangePassword)
 	authProtected.Get("/sessions", authH.ListSessions)
@@ -77,7 +95,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 
 	// ── Authenticated + Tenant-scoped routes ─────────────────
 	authenticated := api.Group("",
-		middleware.Auth(deps.Redis),
+		authMid,
 		middleware.TenantIsolation(),
 	)
 
@@ -137,4 +155,26 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	receipts.Post("/print", receiptH.PrintReceipt)
 	receipts.Get("/test", receiptH.TestPrinter)
 	receipts.Get("/config", receiptH.PrinterConfig)
+
+	// Payments
+	payments := authenticated.Group("/payments")
+	payments.Get("/", paymentH.List)
+	payments.Post("/", paymentH.RecordPayment)
+	payments.Get("/stats", paymentH.Stats)
+	payments.Get("/:id", paymentH.Get)
+	payments.Post("/qr", paymentH.InitiateQR)
+	payments.Post("/:id/regenerate-qr", paymentH.RegenerateQR)
+	payments.Post("/:id/refund", paymentH.Refund)
+
+	// Fonepay callback (public — no auth required)
+	api.Post("/payments/fonepay/callback", paymentH.FonepayCallback)
+
+	// Admins (platform-level)
+	admins := authenticated.Group("/admins")
+	admins.Get("/", adminH.List)
+	admins.Post("/", adminH.Create)
+	admins.Get("/:id", adminH.Get)
+	admins.Put("/:id", adminH.Update)
+	admins.Delete("/:id", adminH.Delete)
+	admins.Put("/:id/password", adminH.ChangePassword)
 }

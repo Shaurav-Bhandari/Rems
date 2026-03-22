@@ -64,16 +64,16 @@ func DefaultCacheConfig() CacheConfig {
 	return CacheConfig{
 		DefaultTTL: 5 * time.Minute,
 		RouteTTLs: map[string]time.Duration{
-			"/api/V1/menu":       15 * time.Minute, // Menu changes infrequently
-			"/api/V1/restaurant": 10 * time.Minute, // Restaurant info is mostly static
-			"/api/V1/analytics":  2 * time.Minute,  // Analytics data is semi-dynamic
-			"/api/V1/forecast":   5 * time.Minute,  // Forecasts update periodically
+			"/api/v1/menu":       15 * time.Minute, // Menu changes infrequently
+			"/api/v1/restaurant": 10 * time.Minute, // Restaurant info is mostly static
+			"/api/v1/analytics":  2 * time.Minute,  // Analytics data is semi-dynamic
+			"/api/v1/forecast":   5 * time.Minute,  // Forecasts update periodically
 		},
 		SkipPaths: []string{
-			"/api/V1/auth",
-			"/api/V1/health",
-			"/api/V1/ping",
-			"/api/V1/orders", // Orders are highly dynamic
+			"/api/v1/auth",
+			"/api/v1/health",
+			"/api/v1/ping",
+			"/api/v1/orders", // Orders are highly dynamic
 		},
 		CacheableStatusCodes: []int{200, 203, 204, 206, 300, 301, 404, 405, 410, 414, 501},
 		KeyPrefix:            "cache:",
@@ -281,8 +281,8 @@ func setCachedResponse(client *redis.Client, key string, cr *cachedResponse, ttl
 }
 
 // invalidateRelatedCache removes cached entries that share the same
-// resource prefix as the mutated path. For example, a POST to /api/V1/menu/items
-// invalidates all cached /api/V1/menu/* responses.
+// resource prefix as the mutated path. For example, a POST to /api/v1/menu/items
+// invalidates all cached /api/v1/menu/* responses.
 func invalidateRelatedCache(cfg CacheConfig, c fiber.Ctx) {
 	if cfg.RedisClient == nil {
 		return

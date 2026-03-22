@@ -32,7 +32,7 @@ type Role struct {
 
 	// Relationships
 	Tenant   Tenant   `gorm:"foreignKey:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
-	Policies []Policy `gorm:"many2many:role_policies;" json:"policies,omitempty"`
+	Policies []Policy `gorm:"many2many:role_policies;joinForeignKey:RoleID;joinReferences:PolicyID" json:"policies,omitempty"`
 }
 
 // AfterFind syncs Name from RoleName so rbac_service.go can use role.Name

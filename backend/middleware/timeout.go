@@ -34,20 +34,20 @@ func DefaultTimeoutConfig() TimeoutConfig {
 		DefaultTimeout: 30 * time.Second,
 		RouteTimeouts: map[string]time.Duration{
 			// Analytics and reports can be slow
-			"/api/V1/analytics": 60 * time.Second,
-			"/api/V1/reports":   60 * time.Second,
-			"/api/V1/forecast":  60 * time.Second,
-			"/api/V1/export":    120 * time.Second,
+			"/api/v1/analytics": 60 * time.Second,
+			"/api/v1/reports":   60 * time.Second,
+			"/api/v1/forecast":  60 * time.Second,
+			"/api/v1/export":    120 * time.Second,
 
 			// Auth operations should be fast
-			"/api/V1/auth": 10 * time.Second,
+			"/api/v1/auth": 10 * time.Second,
 
 			// File uploads may need more time
-			"/api/V1/upload": 120 * time.Second,
+			"/api/v1/upload": 120 * time.Second,
 
 			// Health checks should be instant
-			"/api/V1/health": 5 * time.Second,
-			"/api/V1/ping":   5 * time.Second,
+			"/api/v1/health": 5 * time.Second,
+			"/api/v1/ping":   5 * time.Second,
 		},
 	}
 }

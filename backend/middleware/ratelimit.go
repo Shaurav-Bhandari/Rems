@@ -81,18 +81,18 @@ func DefaultRateLimitConfig() RateLimitConfig {
 			"viewer":            60,
 		},
 		RouteOverrides: map[string]int{
-			"/api/V1/auth/login":           10, // Strict: prevent brute force
-			"/api/V1/auth/register":        5,  // Very strict: prevent spam
-			"/api/V1/auth/forgot-password": 3,  // Very strict
-			"/api/V1/export":               10, // Expensive operations
-			"/api/V1/analytics":            30, // Moderately expensive
+			"/api/v1/auth/login":           10, // Strict: prevent brute force
+			"/api/v1/auth/register":        5,  // Very strict: prevent spam
+			"/api/v1/auth/forgot-password": 3,  // Very strict
+			"/api/v1/export":               10, // Expensive operations
+			"/api/v1/analytics":            30, // Moderately expensive
 		},
 		TenantLimit:    5000,
 		TenantWindow:   1 * time.Minute,
 		AbuseThreshold: 10,
 		SkipPaths: []string{
-			"/api/V1/health",
-			"/api/V1/ping",
+			"/api/v1/health",
+			"/api/v1/ping",
 		},
 		KeyPrefix: "ratelimit:",
 	}

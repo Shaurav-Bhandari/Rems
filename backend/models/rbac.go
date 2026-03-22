@@ -69,7 +69,7 @@ type Policy struct {
 	// Relationships
 	Tenant      Tenant       `gorm:"foreignKey:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	Permissions []Permission `gorm:"foreignKey:PolicyID" json:"permissions,omitempty"`
-	Roles       []Role       `gorm:"many2many:role_policies;" json:"-"`
+	Roles       []Role       `gorm:"many2many:role_policies;joinForeignKey:PolicyID;joinReferences:RoleID" json:"-"`
 }
 
 func (p *Policy) BeforeCreate(tx *gorm.DB) error {
