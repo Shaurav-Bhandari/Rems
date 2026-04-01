@@ -175,6 +175,11 @@
 							<a href="/analytics" class="btn btn-outline-secondary text-start">
 								<i class="bi bi-graph-up me-2"></i> View Reports
 							</a>
+							{#if $currentUser?.default_role === 'superadmin'}
+								<a href="/users" class="btn btn-outline-prussian text-start">
+									<i class="bi bi-people me-2"></i> Manage Users
+								</a>
+							{/if}
 						</div>
 					</div>
 				</div>
