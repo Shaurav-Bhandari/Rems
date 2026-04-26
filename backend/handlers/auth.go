@@ -152,14 +152,12 @@ func (h *AuthHandler) RefreshToken(c fiber.Ctx) error {
 
 	ipAddress := middleware.GetRealIP(c)
 	userAgent := c.Get("User-Agent")
-	deviceFingerprint := middleware.GetFingerprint(c)
 
-	resp, err := h.authService.RefreshToken(
+	resp, err := h.authService.RefreshAccessToken(
 		c.Context(),
-		&req,
+		req.RefreshToken,
 		ipAddress,
 		userAgent,
-		deviceFingerprint,
 	)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, err.Error(), nil)
@@ -189,7 +187,8 @@ func (h *AuthHandler) ChangePassword(c fiber.Ctx) error {
 	err := h.authService.ChangePassword(
 		c.Context(),
 		auth.UserID,
-		&req,
+		req.CurrentPassword,
+		req.NewPassword,
 		ipAddress,
 		userAgent,
 	)
@@ -279,8 +278,9 @@ func (h *AuthHandler) ResetPassword(c fiber.Ctx) error {
 	}
 
 	// Perform password reset via auth service
-	err = h.authService.ResetPassword(ctx, email, &req)
-	if err != nil {
+	ipAddress := middleware.GetRealIP(c)
+	userAgent := c.Get("User-Agent")
+	if err := h.authService.ResetPassword(ctx, email, req.NewPassword, ipAddress, userAgent); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, err.Error(), nil)
 	}
 

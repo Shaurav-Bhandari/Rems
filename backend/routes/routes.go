@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
+
 // Dependencies holds all service instances needed by route handlers.
 type Dependencies struct {
 	DB              *gorm.DB
@@ -20,6 +21,8 @@ type Dependencies struct {
 	SessionService  *services.SessionService
 	TokenService    *services.TokenService
 	SecurityService *services.SecurityService
+	OAuthService    *services.OAuthService
+	OAuthConfig     config.OAuthConfig
 }
 
 // RegisterRoutes wires all route groups with middleware chains.
@@ -64,6 +67,13 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	auth.Post("/forgot-password", authH.ForgotPassword)
 	auth.Post("/reset-password", authH.ResetPassword)
 	auth.Post("/verify-2fa", authH.Verify2FA)
+
+	// ── Google OAuth (public) ────────────────────────────────
+	if deps.OAuthService != nil && deps.OAuthService.IsEnabled() {
+		oauthH := handlers.NewOAuthHandler(deps.OAuthService, deps.OAuthConfig, deps.Redis)
+		auth.Get("/google", oauthH.GoogleLogin)
+		auth.Get("/google/callback", oauthH.GoogleCallback)
+	}
 
 	// Auth-protected auth routes
 	authProtected := auth.Group("", middleware.Auth(deps.Redis))

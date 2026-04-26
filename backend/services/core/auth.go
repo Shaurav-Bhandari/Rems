@@ -4,6 +4,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -11,7 +12,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"math"
+	"net/http"
 
 	// "math/big"
 	// "net"
@@ -381,16 +385,20 @@ func (s *SessionService) CountUserSessions(ctx context.Context, userID uuid.UUID
 }
 
 type PasswordService struct {
-	db              *gorm.DB
-	passwordMinLen  int
-	passwordHistory int
+	db                 *gorm.DB
+	passwordMinLen     int
+	passwordHistory    int
+	breachCheckEnabled bool
 }
 
 func NewPasswordService(db *gorm.DB, minLen, history int) *PasswordService {
+	// Enable breach check via env var (default: true)
+	enabled := config.GetEnvars("HIBP_ENABLED", "true") == "true"
 	return &PasswordService{
-		db:              db,
-		passwordMinLen:  minLen,
-		passwordHistory: history,
+		db:                 db,
+		passwordMinLen:     minLen,
+		passwordHistory:    history,
+		breachCheckEnabled: enabled,
 	}
 }
 
@@ -424,11 +432,63 @@ func (s *PasswordService) ValidatePasswordStrength(password string) error {
 	return nil
 }
 
-// IMPROVEMENT #32: Password breach check stub
+// IMPROVEMENT #32: Password breach check — HaveIBeenPwned k-Anonymity API
+// Sends only the first 5 chars of the SHA-1 hash (prefix) to the API.
+// The API returns all suffixes matching that prefix; we check locally.
+// This means the full password hash never leaves the server.
 func (s *PasswordService) CheckPasswordBreach(password string) (bool, error) {
-	// Stub - implement HaveIBeenPwned API
-	hash := sha256.Sum256([]byte(password))
-	_ = fmt.Sprintf("%X", hash)
+	if !s.breachCheckEnabled {
+		return false, nil
+	}
+
+	// SHA-1 hash the password (HIBP uses SHA-1, not SHA-256)
+	hasher := sha1.New()
+	hasher.Write([]byte(password))
+	hashBytes := hasher.Sum(nil)
+	fullHash := strings.ToUpper(fmt.Sprintf("%x", hashBytes))
+
+	prefix := fullHash[:5]
+	suffix := fullHash[5:]
+
+	// Call HIBP range API
+	url := fmt.Sprintf("https://api.pwnedpasswords.com/range/%s", prefix)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, fmt.Errorf("hibp: request build failed: %w", err)
+	}
+	req.Header.Set("User-Agent", "ReMS-PasswordChecker")
+	req.Header.Set("Add-Padding", "true") // Prevents response-length side-channel
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		// Fail open: if HIBP is unreachable, don't block the user
+		log.Printf("[HIBP] API unreachable: %v — failing open", err)
+		return false, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[HIBP] Unexpected status %d — failing open", resp.StatusCode)
+		return false, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, nil
+	}
+
+	// Each line is "SUFFIX:COUNT"
+	for _, line := range strings.Split(string(body), "\r\n") {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		if strings.EqualFold(parts[0], suffix) {
+			return true, nil // Password found in breach database
+		}
+	}
+
 	return false, nil
 }
 
@@ -751,33 +811,12 @@ func parseDeviceName(userAgent string) string {
 }
 
 // ============================================
-// EMAIL SERVICE
+// EMAIL SERVICE — see email.go for implementation
 // ============================================
 
-type EmailService struct{}
-
-func (e *EmailService) SendVerificationEmail(email, name, token string)                   {}
-func (e *EmailService) SendPasswordChangedNotification(email, name, ip string)            {}
-func (e *EmailService) SendAccountLockedNotification(email, name string, until time.Time) {}
-func (e *EmailService) SendSuspiciousLoginAlert(email, name, ip, location string)         {}
-
 // ============================================
-// GEOIP SERVICE (Improvement #6)
+// GEOIP SERVICE — see geoip.go for implementation
 // ============================================
-
-type GeoIPService struct{}
-
-func (g *GeoIPService) Lookup(ip string) string {
-	return "Unknown Location"
-}
-
-func (g *GeoIPService) GetCountry(ip string) string {
-	return "Unknown"
-}
-
-func (g *GeoIPService) GetCoordinates(ip string) (float64, float64) {
-	return 0.0, 0.0
-}
 
 type AuthService struct {
 	db           *gorm.DB
@@ -841,6 +880,11 @@ func NewAuthService(
 		rateLimitCount:    authCfg.RateLimitCount,
 		rateLimitWindow:   authCfg.RateLimitWindow,
 	}
+}
+
+// DB returns the database connection for direct access when needed.
+func (s *AuthService) DB() *gorm.DB {
+	return s.db
 }
 
 // ============================================
@@ -1151,6 +1195,90 @@ func (s *AuthService) ChangePassword(
 	s.securityService.LogSecurityEvent(ctx, &userID, EventPasswordChanged, SeverityInfo, ipAddress, userAgent, true, nil)
 
 	// Send email
+	go s.emailService.SendPasswordChangedNotification(user.Email, user.FullName, ipAddress)
+
+	return nil
+}
+
+// ============================================
+// RESET PASSWORD (token-based, from email link)
+// ============================================
+
+func (s *AuthService) ResetPassword(
+	ctx context.Context,
+	email string,
+	newPassword string,
+	ipAddress, userAgent string,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Find user
+	var user models.User
+	if err := s.db.WithContext(ctx).Where("email = ?", strings.ToLower(email)).First(&user).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Validate new password strength
+	if err := s.passwordService.ValidatePasswordStrength(newPassword); err != nil {
+		return err
+	}
+
+	// Check breach
+	breached, err := s.passwordService.CheckPasswordBreach(newPassword)
+	if err != nil {
+		return err
+	}
+	if breached {
+		return ErrPasswordBreached
+	}
+
+	// Check history
+	if err := s.passwordService.CheckPasswordHistory(user.UserID, newPassword); err != nil {
+		return err
+	}
+
+	// Hash new password
+	newHash, err := HashPwd(newPassword)
+	if err != nil {
+		return err
+	}
+
+	// Update in transaction
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&user).Updates(map[string]interface{}{
+			"password_hash":       newHash,
+			"password_changed_at": time.Now(),
+		}).Error; err != nil {
+			return err
+		}
+
+		// Save history
+		if err := tx.Create(&models.PasswordHistory{
+			PasswordHistoryID: uuid.New(),
+			UserID:            user.UserID,
+			PasswordHash:      newHash,
+			CreatedAt:         time.Now(),
+		}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// Revoke all sessions
+	s.sessionService.RevokeAllUserSessions(ctx, user.UserID)
+	s.revokeAllRefreshTokens(ctx, user.UserID, "password_reset")
+
+	// Log
+	s.securityService.LogSecurityEvent(ctx, &user.UserID, EventPasswordChanged, SeverityInfo, ipAddress, userAgent, true, map[string]interface{}{
+		"reason": "password_reset",
+	})
+
+	// Notify
 	go s.emailService.SendPasswordChangedNotification(user.Email, user.FullName, ipAddress)
 
 	return nil

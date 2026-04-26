@@ -91,6 +91,10 @@ type User struct {
 	PasswordChangedAt  *time.Time `json:"password_changed_at,omitempty"`
 	MustChangePassword bool       `gorm:"default:false" json:"must_change_password"`
 
+	// ========== GOOGLE OAUTH FIELDS ==========
+	GoogleID  string `gorm:"type:varchar(255);index" json:"google_id,omitempty"`
+	AvatarURL string `gorm:"type:text" json:"avatar_url,omitempty"`
+
 	// ========== YOUR EXISTING RELATIONSHIPS (UNCHANGED) ==========
 	Tenant       Tenant       `gorm:"foreignKey:TenantID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	Organization Organization `gorm:"foreignKey:OrganizationID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"-"`

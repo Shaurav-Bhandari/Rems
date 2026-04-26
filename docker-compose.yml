@@ -1,42 +1,149 @@
-services:
-  DB:
-    image: postgres:18
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: restaurant_management_system
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    # ports: - "5432:5432"  <-- Removed! Only backend needs this internally.
-    networks:
-      - rms_network
-    restart: always
 
-  redis:
-    image: redis:7.2-alpine # Using a stable, slim version
-    container_name: rms_cache
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
-    # ports: - "6379:6379"  <-- Removed!
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:18-alpine
+    container_name: rms_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+      POSTGRES_DB: ${DB_NAME:-restaurant_management_system}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - "5432:5432"
     networks:
       - rms_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: rms_redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-roote}"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - rms_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ImmuDB
   immudb:
     image: codenotary/immudb:latest
-    container_name: immudb
-    volumes:
-      - ./immudb/data:/var/lib/immudb
-    ports:
-      - "8080:8080" # Keep this ONLY if you need the Web Console UI
+    container_name: rms_immudb
     environment:
-      - IMMUDB_ADMIN_PASSWORD=${IMMUDB_PASSWORD}
+      IMMUDB_ADMIN_PASSWORD: ${IMMUDB_PASSWORD:-rooter}
+      IMMUDB_METRICS_ENABLED: "false"
+    volumes:
+      - immudb_data:/var/lib/immudb
+    ports:
+      - "3322:3322"
+      - "9090:8080"
     networks:
       - rms_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "immudb-cli", "-p", "3322", "-u", "immudb", "-P", "${IMMUDB_PASSWORD:-rooter}", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Backend Application
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rms_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      immudb:
+        condition: service_healthy
+    environment:
+      # Server Configuration
+      PORT: 8080
+      
+      # PostgreSQL Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-restaurant_management_system}
+      DB_SSLMODE: disable
+      
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-roote}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-roote}@redis:6379/0
+      
+      # ImmuDB Configuration
+      IMMUDB_HOST: immudb
+      IMMUDB_PORT: 3322
+      IMMUDB_PASSWORD: ${IMMUDB_PASSWORD:-rooter}
+      
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET:-CHANGE_ME_IN_PRODUCTION}
+      
+      # Google OAuth Configuration
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/v1/auth/google/callback}
+      
+      # SMTP Email Configuration
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@rems.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-ReMS}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      
+      # Password Breach Check (HaveIBeenPwned)
+      HIBP_ENABLED: ${HIBP_ENABLED:-true}
+      
+      # Application Settings
+      LOG_LEVEL: info
+      GIN_MODE: release
+    ports:
+      - "8080:8080"
+    networks:
+      - rms_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 networks:
   rms_network:
     driver: bridge
 
 volumes:
-  pgdata:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  immudb_data:
+    driver: local

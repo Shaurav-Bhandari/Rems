@@ -95,13 +95,31 @@ func main() {
 	}
 
 	// ── Initialize services ──────────────────────────────────
-	emailService := &services.EmailService{}
-	geoIPService := &services.GeoIPService{}
+	smtpCfg := config.LoadSMTPConfig()
+	emailService := services.NewEmailService(smtpCfg)
+	if smtpCfg.Enabled {
+		log.Println("✓ Email service enabled (SMTP)")
+	} else {
+		log.Println("⚠️  SMTP not configured — emails will be logged only")
+	}
+
+	geoIPService := services.NewGeoIPService()
+	log.Println("✓ GeoIP service initialized (ip-api.com)")
 
 	authService := services.NewAuthService(db, redisClient, jwtSecret, authCfg, ttlCfg, emailService, geoIPService)
 	sessionService := services.NewSessionService(redisClient)
 	tokenService := services.NewTokenService(jwtSecret, redisClient)
 	securityService := services.NewSecurityService(db, redisClient, geoIPService)
+
+	// ── Initialize Google OAuth ───────────────────────────────
+	oauthCfg := config.LoadOAuthConfig()
+	var oauthService *services.OAuthService
+	if oauthCfg.Enabled {
+		oauthService = services.NewOAuthService(db, redisClient, oauthCfg, tokenService, sessionService, geoIPService, ttlCfg)
+		log.Println("✓ Google OAuth enabled")
+	} else {
+		log.Println("⚠️  Google OAuth not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing)")
+	}
 
 	// ── Create Fiber app ─────────────────────────────────────
 	app := fiber.New(fiber.Config{
@@ -117,6 +135,8 @@ func main() {
 		SessionService:  sessionService,
 		TokenService:    tokenService,
 		SecurityService: securityService,
+		OAuthService:    oauthService,
+		OAuthConfig:     oauthCfg,
 	}
 	routes.RegisterRoutes(app, deps)
 
