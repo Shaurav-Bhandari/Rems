@@ -225,6 +225,24 @@ func RequireManagement() fiber.Handler {
 	)
 }
 
+// ReportsAccessCheck returns an AuthCheck that validates access to view reports.
+// It uses the CanViewReports method which properly checks:
+// - users with "reports.read" permission can access any reports
+// - management users can only access reports for their own restaurant
+func ReportsAccessCheck() AuthCheck {
+	return func(auth *DTO.AuthContext) bool {
+		// Users with reports.read permission can view all reports
+		if auth.HasPermission("reports.read") {
+			return true
+		}
+		// Management users can view reports only for their assigned restaurant
+		if auth.IsManagement() && auth.RestaurantID != nil {
+			return auth.CanViewReports(*auth.RestaurantID) == nil
+		}
+		return false
+	}
+}
+
 // ── RBAC Audit Logging ─────────────────────────────────────────────────────
 
 // logRBACDenied logs an RBAC denial event with full context.
