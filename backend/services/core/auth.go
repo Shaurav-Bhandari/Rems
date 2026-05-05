@@ -1396,9 +1396,11 @@ func (s *AuthService) Verify2FA(
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// 1. Retrieve and validate the pending 2FA session from Redis
+	// 1. Atomically retrieve and delete the pending 2FA session from Redis
+	// Using GetDel to prevent TOCTOU race where two concurrent requests could
+	// both read the session before either deletes it
 	pendingKey := "pending_2fa:" + pendingSessionID
-	data, err := s.redis.Get(ctx, pendingKey).Result()
+	data, err := s.redis.GetDel(ctx, pendingKey).Result()
 	if err == redis.Nil {
 		return nil, ErrInvalidToken // expired or never existed
 	}
@@ -1434,8 +1436,7 @@ func (s *AuthService) Verify2FA(
 		return nil, ErrInvalid2FACode
 	}
 
-	// 4. Consume the pending session — delete it so it can't be reused
-	s.redis.Del(ctx, pendingKey)
+	// 4. Pending session was already consumed atomically by GetDel above
 
 	// 5. Check session cap before creating new session
 	sessionCount, err := s.sessionService.CountUserSessions(ctx, user.UserID)
