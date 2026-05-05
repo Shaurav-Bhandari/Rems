@@ -28,7 +28,7 @@
 //
 // Cache keys:
 //
-//	inventory:item:{itemID}           — models.InventoryItem, TTL 5m
+//	inventory:item:{tenantID}:{itemID} — models.InventoryItem, TTL 5m
 //	inventory:stats:{tenantID}:{restaurantID} — InventoryStats, TTL 2m
 //
 // All mutating operations invalidate affected keys before returning.
@@ -304,7 +304,7 @@ func (s *InventoryService) CreateItem(
 		models.AuditEventCreate, "InventoryItem", item.InventoryItemID.String(),
 		nil, map[string]interface{}{"name": item.Name, "qty": item.CurrentQuantity})
 
-	s.invalidateItemCache(ctx, item.InventoryItemID)
+	s.invalidateItemCache(ctx, in.TenantID, item.InventoryItemID)
 	s.invalidateStatsCache(ctx, in.TenantID, in.RestaurantID)
 
 	// Evaluate initial stock state via FSM
@@ -328,7 +328,7 @@ func (s *InventoryService) GetItem(
 	}
 
 	// ── Redis read-through ────────────────────────────────────────────────────
-	cacheKey := fmt.Sprintf("inventory:item:%s", inventoryItemID)
+	cacheKey := fmt.Sprintf("inventory:item:%s:%s", in.TenantID, inventoryItemID)
 	if data, err := s.redis.Get(ctx, cacheKey).Bytes(); err == nil {
 		var item models.InventoryItem
 		if json.Unmarshal(data, &item) == nil {
@@ -485,7 +485,7 @@ func (s *InventoryService) UpdateItem(
 	s.writeAudit(ctx, in.TenantID, in.RestaurantID, in.ActorID,
 		models.AuditEventUpdate, "InventoryItem", item.InventoryItemID.String(),
 		old, snapshotItem(item))
-	s.invalidateItemCache(ctx, item.InventoryItemID)
+	s.invalidateItemCache(ctx, in.TenantID, item.InventoryItemID)
 	s.invalidateStatsCache(ctx, in.TenantID, in.RestaurantID)
 
 	return item, nil
@@ -531,7 +531,7 @@ func (s *InventoryService) DeleteItem(
 	s.writeAudit(ctx, in.TenantID, in.RestaurantID, in.ActorID,
 		models.AuditEventDelete, "InventoryItem", inventoryItemID.String(),
 		snapshotItem(item), nil)
-	s.invalidateItemCache(ctx, inventoryItemID)
+	s.invalidateItemCache(ctx, in.TenantID, inventoryItemID)
 	s.invalidateStatsCache(ctx, in.TenantID, in.RestaurantID)
 	return nil
 }
@@ -606,7 +606,7 @@ func (s *InventoryService) AdjustStock(
 	}
 
 	item.CurrentQuantity = newQty
-	s.invalidateItemCache(ctx, in.InventoryItemID)
+	s.invalidateItemCache(ctx, in.TenantID, in.InventoryItemID)
 	s.invalidateStatsCache(ctx, in.TenantID, in.RestaurantID)
 
 	// Evaluate stock state transition via FSM — replaces the old ad-hoc
@@ -702,7 +702,7 @@ func (s *InventoryService) DeductForOrder(ctx context.Context, in DeductForOrder
 		}
 
 		item.CurrentQuantity = newQty
-		s.invalidateItemCache(ctx, invItemID)
+		s.invalidateItemCache(ctx, in.TenantID, invItemID)
 
 		// FSM-driven stock state evaluation
 		s.evaluateStockTransition(ctx, in.TenantID, &item)
@@ -1149,8 +1149,8 @@ func (s *InventoryService) getVendorForWrite(
 	return &vendor, nil
 }
 
-func (s *InventoryService) invalidateItemCache(ctx context.Context, itemID uuid.UUID) {
-	_ = s.redis.Del(ctx, fmt.Sprintf("inventory:item:%s", itemID)).Err()
+func (s *InventoryService) invalidateItemCache(ctx context.Context, tenantID, itemID uuid.UUID) {
+	_ = s.redis.Del(ctx, fmt.Sprintf("inventory:item:%s:%s", tenantID, itemID)).Err()
 }
 
 func (s *InventoryService) invalidateStatsCache(ctx context.Context, tenantID, restaurantID uuid.UUID) {
