@@ -126,7 +126,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	inventory.Post("/", inventoryH.Create)
 	inventory.Get("/:id", inventoryH.Get)
 	inventory.Put("/:id", inventoryH.Update)
-	inventory.Post("/:id/adjust", inventoryH.AdjustStock)
+	inventory.Post("/:id/adjust", middleware.RequireInventoryAccess(), inventoryH.AdjustStock)
 	inventory.Delete("/:id", inventoryH.Delete)
 
 	// Analytics (requires reports access with restaurant_id validation)
