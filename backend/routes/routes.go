@@ -125,7 +125,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	inventory.Get("/", inventoryH.List)
 	inventory.Post("/", inventoryH.Create)
 	inventory.Get("/:id", inventoryH.Get)
-	inventory.Put("/:id", inventoryH.Update)
+	inventory.Put("/:id", middleware.RequireInventoryAccess(), inventoryH.Update)
 	inventory.Post("/:id/adjust", middleware.RequireInventoryAccess(), inventoryH.AdjustStock)
 	inventory.Delete("/:id", inventoryH.Delete)
 
