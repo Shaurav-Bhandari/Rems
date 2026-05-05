@@ -109,7 +109,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	orders.Post("/", orderH.Create)
 	orders.Get("/:id", orderH.Get)
 	orders.Put("/:id/status", orderH.UpdateStatus)
-	orders.Delete("/:id", orderH.Delete)
+	orders.Delete("/:id", middleware.RequirePermission("order", "delete"), orderH.Delete)
 
 	// Menu
 	menu := authenticated.Group("/menu")
