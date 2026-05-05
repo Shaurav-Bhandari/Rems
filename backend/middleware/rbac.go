@@ -303,6 +303,51 @@ func RequireInventoryAccess() fiber.Handler {
 	}
 }
 
+// RequireMenuAccess returns middleware that validates the user can manage menu
+// for the restaurant_id query parameter. Uses CanManageMenu() for proper authorization.
+func RequireMenuAccess() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		auth := GetAuthContext(c)
+		if auth == nil {
+			return utils.SendResponse(c, fiber.StatusUnauthorized,
+				"Authentication required", nil)
+		}
+
+		// Get restaurant_id from query parameter
+		restaurantIDStr := c.Query("restaurant_id")
+		if restaurantIDStr == "" {
+			// If no restaurant_id provided, user must have global menu permissions
+			if !auth.HasAnyPermission("menu.create", "menu.update", "menu.delete") {
+				logRBACDenied(c, auth, "menu_access_denied", map[string]interface{}{
+					"reason": "restaurant_id required for non-admin users",
+				})
+				return utils.SendResponse(c, fiber.StatusForbidden,
+					"restaurant_id parameter is required", nil)
+			}
+			return c.Next()
+		}
+
+		// Parse and validate restaurant_id
+		restaurantID, err := uuid.Parse(restaurantIDStr)
+		if err != nil {
+			return utils.SendResponse(c, fiber.StatusBadRequest,
+				"Invalid restaurant_id format", nil)
+		}
+
+		// Use CanManageMenu to validate access
+		if err := auth.CanManageMenu(restaurantID); err != nil {
+			logRBACDenied(c, auth, "menu_access_denied", map[string]interface{}{
+				"restaurant_id": restaurantID.String(),
+				"reason":        err.Error(),
+			})
+			return utils.SendResponse(c, fiber.StatusForbidden,
+				"You do not have access to manage menu for this restaurant", nil)
+		}
+
+		return c.Next()
+	}
+}
+
 // RequireAdmin is a convenience middleware that requires admin or super_admin.
 func RequireAdmin() fiber.Handler {
 	return RequireRole(DTO.RoleSuperAdmin, DTO.RoleAdmin)

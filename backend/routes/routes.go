@@ -118,7 +118,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	menu.Get("/items", menuH.ListItems)
 	menu.Post("/items", menuH.CreateItem)
 	menu.Put("/items/:id", menuH.UpdateItem)
-	menu.Delete("/items/:id", menuH.DeleteItem)
+	menu.Delete("/items/:id", middleware.RequireMenuAccess(), menuH.DeleteItem)
 
 	// Inventory
 	inventory := authenticated.Group("/inventory")
