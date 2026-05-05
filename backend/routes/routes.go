@@ -129,15 +129,13 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	inventory.Post("/:id/adjust", middleware.RequireInventoryAccess(), inventoryH.AdjustStock)
 	inventory.Delete("/:id", inventoryH.Delete)
 
+	// Analytics (requires reports.read permission or management role)
 	// Analytics (requires reports.read permission OR management role for own restaurant)
 	analytics := authenticated.Group("/analytics",
 		middleware.RequireAny(
 			middleware.ReportsAccessCheck(),
 		),
-	// Analytics (requires reports access with restaurant_id validation)
-	analytics := authenticated.Group("/analytics",
-		middleware.RequireReportsAccess(),
-	)
+
 	analytics.Get("/revenue/overview", analyticsH.RevenueOverview)
 	analytics.Get("/revenue/trend", analyticsH.RevenueTrend)
 	analytics.Get("/orders/volume", analyticsH.OrderVolume)
