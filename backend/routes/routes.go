@@ -101,7 +101,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	restaurants.Post("/", restaurantH.Create)
 	restaurants.Get("/:id", restaurantH.Get)
 	restaurants.Put("/:id", restaurantH.Update)
-	restaurants.Delete("/:id", restaurantH.Delete)
+	restaurants.Delete("/:id", middleware.RequirePermission("restaurant", "delete"), restaurantH.Delete)
 
 	// Orders
 	orders := authenticated.Group("/orders")
