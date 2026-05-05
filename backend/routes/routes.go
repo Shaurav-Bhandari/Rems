@@ -116,7 +116,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	menu.Get("/categories", menuH.ListCategories)
 	menu.Post("/categories", menuH.CreateCategory)
 	menu.Get("/items", menuH.ListItems)
-	menu.Post("/items", menuH.CreateItem)
+	menu.Post("/items", middleware.RequireMenuAccess(), menuH.CreateItem)
 	menu.Put("/items/:id", middleware.RequireMenuAccess(), menuH.UpdateItem)
 	menu.Delete("/items/:id", middleware.RequireMenuAccess(), menuH.DeleteItem)
 
