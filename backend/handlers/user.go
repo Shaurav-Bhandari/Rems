@@ -93,6 +93,11 @@ func (h *UserHandler) Update(c fiber.Ctx) error {
 	delete(body, "password_hash")
 	delete(body, "user_id")
 	delete(body, "tenant_id")
+	delete(body, "primary_role")
+	delete(body, "is_active")
+	delete(body, "is_email_verified")
+	delete(body, "is_deleted")
+	delete(body, "deleted_by")
 
 	result := h.db.Table("users").
 		Where("user_id = ? AND tenant_id = ? AND is_deleted = false", id, auth.TenantID).
