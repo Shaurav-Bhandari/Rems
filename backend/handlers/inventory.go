@@ -5,6 +5,7 @@ import (
 	"backend/utils"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -154,6 +155,27 @@ func (h *InventoryHandler) Delete(c fiber.Ctx) error {
 	}
 
 	id := c.Params("id")
+
+	// Fetch item to get restaurant_id for authorization check
+	var item struct {
+		RestaurantID string `gorm:"column:restaurant_id"`
+	}
+	if err := h.db.Table("inventory_items").
+		Select("restaurant_id").
+		Where("inventory_item_id = ? AND tenant_id = ?", id, auth.TenantID).
+		First(&item).Error; err != nil {
+		return utils.SendResponse(c, fiber.StatusNotFound, "Inventory item not found", nil)
+	}
+
+	// Parse restaurant_id and check authorization
+	restaurantID, err := uuid.Parse(item.RestaurantID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, "Invalid restaurant ID", nil)
+	}
+
+	if err := auth.CanManageInventory(restaurantID); err != nil {
+		return utils.SendResponse(c, fiber.StatusForbidden, err.Error(), nil)
+	}
 
 	result := h.db.Table("inventory_items").
 		Where("inventory_item_id = ? AND tenant_id = ?", id, auth.TenantID).

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 )
 
 // ============================================================================
@@ -209,6 +210,141 @@ func AdminCheck() AuthCheck {
 func ManagementCheck() AuthCheck {
 	return func(auth *DTO.AuthContext) bool {
 		return auth.IsManagement()
+	}
+}
+
+// RequireReportsAccess returns middleware that validates the user can view reports
+// for the restaurant_id query parameter. Uses CanViewReports() for proper authorization.
+func RequireReportsAccess() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		auth := GetAuthContext(c)
+		if auth == nil {
+			return utils.SendResponse(c, fiber.StatusUnauthorized,
+				"Authentication required", nil)
+		}
+
+		// Get restaurant_id from query parameter
+		restaurantIDStr := c.Query("restaurant_id")
+		if restaurantIDStr == "" {
+			// If no restaurant_id provided, user must have global reports.read permission
+			if !auth.HasPermission("reports.read") {
+				logRBACDenied(c, auth, "reports_access_denied", map[string]interface{}{
+					"reason": "restaurant_id required for non-admin users",
+				})
+				return utils.SendResponse(c, fiber.StatusForbidden,
+					"restaurant_id parameter is required", nil)
+			}
+			return c.Next()
+		}
+
+		// Parse and validate restaurant_id
+		restaurantID, err := uuid.Parse(restaurantIDStr)
+		if err != nil {
+			return utils.SendResponse(c, fiber.StatusBadRequest,
+				"Invalid restaurant_id format", nil)
+		}
+
+		// Use CanViewReports to validate access
+		if err := auth.CanViewReports(restaurantID); err != nil {
+			logRBACDenied(c, auth, "reports_access_denied", map[string]interface{}{
+				"restaurant_id": restaurantID.String(),
+				"reason":        err.Error(),
+			})
+			return utils.SendResponse(c, fiber.StatusForbidden,
+				"You do not have access to reports for this restaurant", nil)
+		}
+
+		return c.Next()
+	}
+}
+
+// RequireInventoryAccess returns middleware that validates the user can manage inventory
+// for the restaurant_id query parameter. Uses CanManageInventory() for proper authorization.
+func RequireInventoryAccess() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		auth := GetAuthContext(c)
+		if auth == nil {
+			return utils.SendResponse(c, fiber.StatusUnauthorized,
+				"Authentication required", nil)
+		}
+
+		// Get restaurant_id from query parameter
+		restaurantIDStr := c.Query("restaurant_id")
+		if restaurantIDStr == "" {
+			// If no restaurant_id provided, user must have global inventory permissions
+			if !auth.HasAnyPermission("inventory.create", "inventory.update", "inventory.delete") {
+				logRBACDenied(c, auth, "inventory_access_denied", map[string]interface{}{
+					"reason": "restaurant_id required for non-admin users",
+				})
+				return utils.SendResponse(c, fiber.StatusForbidden,
+					"restaurant_id parameter is required", nil)
+			}
+			return c.Next()
+		}
+
+		// Parse and validate restaurant_id
+		restaurantID, err := uuid.Parse(restaurantIDStr)
+		if err != nil {
+			return utils.SendResponse(c, fiber.StatusBadRequest,
+				"Invalid restaurant_id format", nil)
+		}
+
+		// Use CanManageInventory to validate access
+		if err := auth.CanManageInventory(restaurantID); err != nil {
+			logRBACDenied(c, auth, "inventory_access_denied", map[string]interface{}{
+				"restaurant_id": restaurantID.String(),
+				"reason":        err.Error(),
+			})
+			return utils.SendResponse(c, fiber.StatusForbidden,
+				"You do not have access to manage inventory for this restaurant", nil)
+		}
+
+		return c.Next()
+	}
+}
+
+// RequireMenuAccess returns middleware that validates the user can manage menu
+// for the restaurant_id query parameter. Uses CanManageMenu() for proper authorization.
+func RequireMenuAccess() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		auth := GetAuthContext(c)
+		if auth == nil {
+			return utils.SendResponse(c, fiber.StatusUnauthorized,
+				"Authentication required", nil)
+		}
+
+		// Get restaurant_id from query parameter
+		restaurantIDStr := c.Query("restaurant_id")
+		if restaurantIDStr == "" {
+			// If no restaurant_id provided, user must have global menu permissions
+			if !auth.HasAnyPermission("menu.create", "menu.update", "menu.delete") {
+				logRBACDenied(c, auth, "menu_access_denied", map[string]interface{}{
+					"reason": "restaurant_id required for non-admin users",
+				})
+				return utils.SendResponse(c, fiber.StatusForbidden,
+					"restaurant_id parameter is required", nil)
+			}
+			return c.Next()
+		}
+
+		// Parse and validate restaurant_id
+		restaurantID, err := uuid.Parse(restaurantIDStr)
+		if err != nil {
+			return utils.SendResponse(c, fiber.StatusBadRequest,
+				"Invalid restaurant_id format", nil)
+		}
+
+		// Use CanManageMenu to validate access
+		if err := auth.CanManageMenu(restaurantID); err != nil {
+			logRBACDenied(c, auth, "menu_access_denied", map[string]interface{}{
+				"restaurant_id": restaurantID.String(),
+				"reason":        err.Error(),
+			})
+			return utils.SendResponse(c, fiber.StatusForbidden,
+				"You do not have access to manage menu for this restaurant", nil)
+		}
+
+		return c.Next()
 	}
 }
 
