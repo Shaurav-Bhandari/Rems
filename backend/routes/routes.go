@@ -117,7 +117,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	menu.Post("/categories", menuH.CreateCategory)
 	menu.Get("/items", menuH.ListItems)
 	menu.Post("/items", menuH.CreateItem)
-	menu.Put("/items/:id", menuH.UpdateItem)
+	menu.Put("/items/:id", middleware.RequireMenuAccess(), menuH.UpdateItem)
 	menu.Delete("/items/:id", middleware.RequireMenuAccess(), menuH.DeleteItem)
 
 	// Inventory
@@ -130,12 +130,12 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	inventory.Delete("/:id", inventoryH.Delete)
 
 	// Analytics (requires reports.read permission or management role)
+	// Analytics (requires reports.read permission OR management role for own restaurant)
 	analytics := authenticated.Group("/analytics",
 		middleware.RequireAny(
-			middleware.PermissionCheck("reports.read"),
-			middleware.ManagementCheck(),
+			middleware.ReportsAccessCheck(),
 		),
-	)
+
 	analytics.Get("/revenue/overview", analyticsH.RevenueOverview)
 	analytics.Get("/revenue/trend", analyticsH.RevenueTrend)
 	analytics.Get("/orders/volume", analyticsH.OrderVolume)
