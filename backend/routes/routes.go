@@ -117,25 +117,20 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	menu.Post("/categories", menuH.CreateCategory)
 	menu.Get("/items", menuH.ListItems)
 	menu.Post("/items", menuH.CreateItem)
-	menu.Put("/items/:id", menuH.UpdateItem)
-	menu.Delete("/items/:id", menuH.DeleteItem)
+	menu.Put("/items/:id", middleware.RequireMenuAccess(), menuH.UpdateItem)
+	menu.Delete("/items/:id", middleware.RequireMenuAccess(), menuH.DeleteItem)
 
 	// Inventory
 	inventory := authenticated.Group("/inventory")
 	inventory.Get("/", inventoryH.List)
-	inventory.Post("/", inventoryH.Create)
+	inventory.Post("/", middleware.RequireInventoryAccess(), inventoryH.Create)
 	inventory.Get("/:id", inventoryH.Get)
-	inventory.Put("/:id", inventoryH.Update)
-	inventory.Post("/:id/adjust", inventoryH.AdjustStock)
+	inventory.Put("/:id", middleware.RequireInventoryAccess(), inventoryH.Update)
+	inventory.Post("/:id/adjust", middleware.RequireInventoryAccess(), inventoryH.AdjustStock)
 	inventory.Delete("/:id", inventoryH.Delete)
 
-	// Analytics (requires management role or reports.read permission)
-	analytics := authenticated.Group("/analytics",
-		middleware.RequireAny(
-			middleware.ManagementCheck(),
-			middleware.PermissionCheck("reports.read"),
-		),
-	)
+	// Analytics (requires reports.read permission)
+	analytics := authenticated.Group("/analytics", middleware.RequirePermission("reports", "read"))
 	analytics.Get("/revenue/overview", analyticsH.RevenueOverview)
 	analytics.Get("/revenue/trend", analyticsH.RevenueTrend)
 	analytics.Get("/orders/volume", analyticsH.OrderVolume)
