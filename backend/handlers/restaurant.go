@@ -5,6 +5,7 @@ import (
 	"backend/utils"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -128,6 +129,15 @@ func (h *RestaurantHandler) Delete(c fiber.Ctx) error {
 	}
 
 	id := c.Params("id")
+
+	restaurantID, err := uuid.Parse(id)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "Invalid restaurant ID", nil)
+	}
+
+	if err := auth.CanDeleteRestaurant(restaurantID); err != nil {
+		return utils.SendResponse(c, fiber.StatusForbidden, err.Error(), nil)
+	}
 
 	result := h.db.Table("restaurants").
 		Where("restaurant_id = ? AND tenant_id = ?", id, auth.TenantID).
