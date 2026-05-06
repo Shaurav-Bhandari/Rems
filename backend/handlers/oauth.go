@@ -92,16 +92,20 @@ func (h *OAuthHandler) GoogleCallback(c fiber.Ctx) error {
 			"Missing state parameter", nil)
 	}
 
-	if h.redis != nil {
-		stateKey := fmt.Sprintf("oauth_state:%s", state)
-		result, err := h.redis.Get(c.Context(), stateKey).Result()
-		if err != nil || result != "1" {
-			return utils.SendResponse(c, fiber.StatusBadRequest,
-				"Invalid or expired state token", nil)
-		}
-		// Delete state token (one-time use)
-		h.redis.Del(c.Context(), stateKey)
+	// CSRF validation is mandatory - Redis must be available
+	if h.redis == nil {
+		return utils.SendResponse(c, fiber.StatusServiceUnavailable,
+			"CSRF validation unavailable", nil)
 	}
+
+	stateKey := fmt.Sprintf("oauth_state:%s", state)
+	result, err := h.redis.Get(c.Context(), stateKey).Result()
+	if err != nil || result != "1" {
+		return utils.SendResponse(c, fiber.StatusBadRequest,
+			"Invalid or expired state token", nil)
+	}
+	// Delete state token (one-time use)
+	h.redis.Del(c.Context(), stateKey)
 
 	// Extract client info
 	ipAddress := c.Get("X-Forwarded-For")
