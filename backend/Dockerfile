@@ -26,8 +26,14 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
 
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
+
 # Copy binary from builder
 COPY --from=builder /app/backend .
+
+# Set ownership to non-root user
+RUN chown appuser:appgroup ./backend
 
 # Expose port
 EXPOSE 8080
@@ -35,6 +41,9 @@ EXPOSE 8080
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Switch to non-root user
+USER appuser
 
 # Run the backend
 CMD ["./backend"]
