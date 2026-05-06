@@ -10,6 +10,9 @@ func AllModels() []interface{} {
 		&models.Organization{},
 		&models.Branch{},
 		&models.Role{},
+		&models.Policy{},
+		&models.Permission{},
+		&models.RolePolicy{},
 		&models.User{},
 		&models.UserRole{},
 		
@@ -39,6 +42,7 @@ func AllModels() []interface{} {
 		
 		// Orders & KOT
 		&models.Order{},
+		&models.OrderGroup{},
 		&models.OrderItem{},
 		&models.OrderItemModifier{},
 		&models.OrderLog{},

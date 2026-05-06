@@ -90,6 +90,10 @@ func getAllModels() []interface{} {
 		&models.Organization{},
 		&models.Branch{},
 		&models.Role{},
+		&models.Policy{},
+		&models.Permission{},
+		&models.RolePolicy{},
+		&models.RBACEvent{},
 		&models.Customer{},
 		&models.Vendor{},
 		
@@ -111,6 +115,12 @@ func getAllModels() []interface{} {
 		&models.UserRole{},
 		&models.Session{},
 		&models.PasswordReset{},
+		&models.PasswordHistory{},
+		&models.RefreshToken{},
+		&models.DeviceRegistry{},
+		&models.SecurityEvent{},
+		&models.EmailVerificationToken{},
+		&models.PasswordResetToken{},
 		
 		// Employees
 		&models.Employee{},
@@ -118,9 +128,12 @@ func getAllModels() []interface{} {
 		
 		// Orders
 		&models.Order{},
+		&models.OrderGroup{},
 		&models.OrderItem{},
 		&models.OrderItemModifier{},
 		&models.OrderLog{},
+		&models.OrderTaxBreakdown{},
+		&models.OutboxEvent{},
 		
 		// Kitchen
 		&models.KOT{},
@@ -130,6 +143,8 @@ func getAllModels() []interface{} {
 		&models.InventoryItem{},
 		&models.PurchaseOrder{},
 		&models.PurchaseOrderLine{},
+		&models.StockMovement{},
+		&models.MenuItemInventoryLink{},
 		
 		// Financial
 		&models.PaymentRecord{},
@@ -151,6 +166,14 @@ func getAllModels() []interface{} {
 		&models.WebhookSubscription{},
 		&models.WorkflowRule{},
 		&models.APIKey{},
+		
+		// Tenant Settings & Profiles
+		&models.TenantSetting{},
+		&models.RestaurantProfile{},
+		&models.UserProfile{},
+		&models.SettingOverride{},
+		&models.ElevationToken{},
+		&models.SettingAuditLog{},
 		
 		// Audit & Security
 		&models.ActivityLog{},

@@ -1,0 +1,46 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/inventory/"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "restaurant_id": "{{restaurantId}}",
+      "name": "Tomatoes",
+      "description": "Fresh tomatoes",
+      "sku": "TOM-001",
+      "category": "Vegetables",
+      "unit_of_measure": "kg",
+      "current_quantity": 50.0,
+      "minimum_quantity": 10.0,
+      "maximum_quantity": 100.0,
+      "reorder_point": 15.0,
+      "unit_cost": 2.50
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 201", () => pm.response.to.have.status(201));
+      pm.test("Item has inventory_item_id", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("inventory_item_id");
+      });
+      pm.test("Stock status is set", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("stock_status");
+          pm.expect(["in_stock", "low_stock", "out_of_stock"]).to.include(json.data.stock_status);
+      });
+      if (pm.response.code === 201) {
+          const json = pm.response.json();
+          if (json.data && json.data.inventory_item_id) {
+              pm.collectionVariables.set("inventoryItemId", json.data.inventory_item_id);
+          }
+      }
+    language: text/javascript
+order: 2000

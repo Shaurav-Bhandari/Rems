@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "admin@rems-test.com",
+      "password": "TestPass@123",
+      "device_type": "web"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response has token", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("token");
+          pm.expect(json.data).to.have.property("refresh_token");
+      });
+      if (pm.response.code === 200) {
+          const json = pm.response.json();
+          if (json.data && json.data.token) {
+              pm.collectionVariables.set("accessToken", json.data.token);
+              pm.collectionVariables.set("refreshToken", json.data.refresh_token);
+              pm.collectionVariables.set("tenantId", json.data.user.tenant_id);
+              pm.collectionVariables.set("userId", json.data.user.user_id);
+          }
+      }
+    language: text/javascript
+order: 2000

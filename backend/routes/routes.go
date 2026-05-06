@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"backend/DTO"
 	"backend/config"
 	"backend/handlers"
 	"backend/middleware"
@@ -23,6 +24,7 @@ type Dependencies struct {
 	SecurityService *services.SecurityService
 	OAuthService    *services.OAuthService
 	OAuthConfig     config.OAuthConfig
+	RBACService     *services.RBACService
 }
 
 // RegisterRoutes wires all route groups with middleware chains.
@@ -44,6 +46,7 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	userH := handlers.NewUserHandler(deps.DB)
 	analyticsH := handlers.NewAnalyticsHandler(deps.DB)
 	healthH := handlers.NewHealthHandler(deps.Redis, deps.Vault)
+	roleH := handlers.NewRoleHandler(deps.DB, deps.RBACService)
 
 	// ── Global middleware (applied to ALL routes) ─────────────
 	app.Use(middleware.RequestID())
@@ -94,6 +97,17 @@ func RegisterRoutes(app *fiber.App, deps *Dependencies) {
 	users.Get("/:id", userH.Get)
 	users.Put("/:id", userH.Update)
 	users.Delete("/:id", userH.Delete)
+	users.Get("/:id/roles", roleH.GetUserRoles)
+	users.Post("/:id/roles", roleH.AssignRole)
+	users.Delete("/:id/roles/:roleId", roleH.RevokeRole)
+
+	// Roles (admin-only CRUD)
+	roles := authenticated.Group("/roles")
+	roles.Get("/", roleH.List)
+	roles.Get("/:id", roleH.Get)
+	roles.Post("/", middleware.RequireRole(DTO.RoleSuperAdmin, DTO.RoleAdmin), roleH.Create)
+	roles.Put("/:id", middleware.RequireRole(DTO.RoleSuperAdmin, DTO.RoleAdmin), roleH.Update)
+	roles.Delete("/:id", middleware.RequireRole(DTO.RoleSuperAdmin, DTO.RoleAdmin), roleH.Delete)
 
 	// Restaurants
 	restaurants := authenticated.Group("/restaurants")

@@ -1,7 +1,4 @@
-
-
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:18-alpine
     container_name: rms_postgres
@@ -11,20 +8,19 @@ services:
       POSTGRES_DB: ${DB_NAME:-restaurant_management_system}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - postgres_data:/var/lib/postgresql/  
     ports:
       - "5432:5432"
     networks:
       - rms_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-restaurant_management_system}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  # Redis Cache
   redis:
     image: redis:7.2-alpine
     container_name: rms_redis
@@ -37,13 +33,12 @@ services:
       - rms_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-roote}", "ping"]   # Fixed: auth + real ping
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  # ImmuDB
   immudb:
     image: codenotary/immudb:latest
     container_name: rms_immudb
@@ -58,14 +53,7 @@ services:
     networks:
       - rms_network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "immudb-cli", "-p", "3322", "-u", "immudb", "-P", "${IMMUDB_PASSWORD:-rooter}", "status"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
-  # Backend Application
   backend:
     build:
       context: ./backend
@@ -77,39 +65,26 @@ services:
       redis:
         condition: service_healthy
       immudb:
-        condition: service_healthy
+        condition: service_started
     environment:
-      # Server Configuration
       PORT: 8080
-      
-      # PostgreSQL Configuration
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-root}
       DB_NAME: ${DB_NAME:-restaurant_management_system}
       DB_SSLMODE: disable
-      
-      # Redis Configuration
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-roote}
       REDIS_URL: redis://:${REDIS_PASSWORD:-roote}@redis:6379/0
-      
-      # ImmuDB Configuration
       IMMUDB_HOST: immudb
       IMMUDB_PORT: 3322
       IMMUDB_PASSWORD: ${IMMUDB_PASSWORD:-rooter}
-      
-      # JWT Configuration
       JWT_SECRET: ${JWT_SECRET:-CHANGE_ME_IN_PRODUCTION}
-      
-      # Google OAuth Configuration
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/v1/auth/google/callback}
-      
-      # SMTP Email Configuration
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
@@ -117,11 +92,10 @@ services:
       SMTP_FROM: ${SMTP_FROM:-noreply@rems.local}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-ReMS}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
-      
-      # Password Breach Check (HaveIBeenPwned)
       HIBP_ENABLED: ${HIBP_ENABLED:-true}
-      
-      # Application Settings
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-shauravbhandari2@gmail.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-shaurav45}
+      SUPER_ADMIN_NAME: ${SUPER_ADMIN_NAME:-Shaurav Bhandari}
       LOG_LEVEL: info
       GIN_MODE: release
     ports:

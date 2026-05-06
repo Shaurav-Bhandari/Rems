@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/restaurants/{{restaurantId}}"
+method: DELETE
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200 or 204", () => {
+          pm.expect([200, 204]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 5000

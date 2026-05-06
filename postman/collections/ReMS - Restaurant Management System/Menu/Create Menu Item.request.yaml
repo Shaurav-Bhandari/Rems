@@ -1,0 +1,41 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/menu/items"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "menu_category_id": "{{menuCategoryId}}",
+      "restaurant_id": "{{restaurantId}}",
+      "name": "Spring Rolls",
+      "description": "Crispy vegetable spring rolls",
+      "base_price": 8.99,
+      "preparation_time_minutes": 10,
+      "allergen_info": "Contains gluten"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 201", () => pm.response.to.have.status(201));
+      pm.test("Item has menu_item_id", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("menu_item_id");
+      });
+      pm.test("Base price is non-negative", () => {
+          const json = pm.response.json();
+          pm.expect(json.data.base_price).to.be.at.least(0);
+      });
+      if (pm.response.code === 201) {
+          const json = pm.response.json();
+          if (json.data && json.data.menu_item_id) {
+              pm.collectionVariables.set("menuItemId", json.data.menu_item_id);
+          }
+      }
+    language: text/javascript
+order: 4000

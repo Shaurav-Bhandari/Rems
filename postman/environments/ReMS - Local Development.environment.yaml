@@ -1,0 +1,63 @@
+$kind: environment
+name: ReMS - Local Development
+values:
+  - key: baseUrl
+    value: 'http://localhost:8080'
+    enabled: true
+    type: default
+  - key: accessToken
+    value: ''
+    enabled: true
+    type: secret
+  - key: refreshToken
+    value: ''
+    enabled: true
+    type: secret
+  - key: tenantId
+    value: ''
+    enabled: true
+    type: default
+  - key: restaurantId
+    value: ''
+    enabled: true
+    type: default
+  - key: menuCategoryId
+    value: ''
+    enabled: true
+    type: default
+  - key: menuItemId
+    value: ''
+    enabled: true
+    type: default
+  - key: orderId
+    value: ''
+    enabled: true
+    type: default
+  - key: inventoryItemId
+    value: ''
+    enabled: true
+    type: default
+  - key: userId
+    value: ''
+    enabled: true
+    type: default
+  - key: sessionId
+    value: ''
+    enabled: true
+    type: default
+  - key: dbHost
+    value: localhost
+    enabled: true
+    type: default
+  - key: dbPort
+    value: '5432'
+    enabled: true
+    type: default
+  - key: redisHost
+    value: localhost
+    enabled: true
+    type: default
+  - key: redisPort
+    value: '6379'
+    enabled: true
+    type: default

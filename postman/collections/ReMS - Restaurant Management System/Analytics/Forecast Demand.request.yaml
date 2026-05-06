@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/analytics/forecast/demand"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response has data", () => {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("data");
+      });
+    language: text/javascript
+order: 7000

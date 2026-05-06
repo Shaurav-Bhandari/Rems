@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/orders/"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response has orders array", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("orders");
+      });
+      if (pm.response.code === 200) {
+          const json = pm.response.json();
+          if (json.data && json.data.orders && json.data.orders.length > 0) {
+              pm.collectionVariables.set("orderId", json.data.orders[0].order_id);
+          }
+      }
+    language: text/javascript
+order: 1000

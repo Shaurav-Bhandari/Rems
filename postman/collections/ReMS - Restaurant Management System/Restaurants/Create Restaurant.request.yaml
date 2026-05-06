@@ -1,0 +1,38 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/restaurants/"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Test Restaurant",
+      "address": "123 Main Street",
+      "city": "Kathmandu",
+      "state": "Bagmati",
+      "country": "Nepal",
+      "postal_code": "44600",
+      "phone": "+9771234567",
+      "email": "restaurant@rems-test.com"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 201", () => pm.response.to.have.status(201));
+      pm.test("Response has restaurant_id", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("restaurant_id");
+      });
+      if (pm.response.code === 201) {
+          const json = pm.response.json();
+          if (json.data && json.data.restaurant_id) {
+              pm.collectionVariables.set("restaurantId", json.data.restaurant_id);
+          }
+      }
+    language: text/javascript
+order: 2000

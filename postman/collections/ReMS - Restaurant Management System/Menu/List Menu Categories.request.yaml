@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/menu/categories"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response has categories", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("categories");
+      });
+      if (pm.response.code === 200) {
+          const json = pm.response.json();
+          if (json.data && json.data.categories && json.data.categories.length > 0) {
+              pm.collectionVariables.set("menuCategoryId", json.data.categories[0].menu_category_id);
+          }
+      }
+    language: text/javascript
+order: 1000

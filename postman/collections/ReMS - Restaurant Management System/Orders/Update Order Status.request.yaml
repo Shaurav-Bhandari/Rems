@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/orders/{{orderId}}/status"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "order_status": "InProgress"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Order status updated", () => {
+          const json = pm.response.json();
+          pm.expect(json.data.order_status).to.equal("InProgress");
+      });
+    language: text/javascript
+order: 4000

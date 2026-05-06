@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/restaurants/{{restaurantId}}"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Restaurant ID matches", () => {
+          const json = pm.response.json();
+          pm.expect(json.data.restaurant_id).to.equal(pm.collectionVariables.get("restaurantId"));
+      });
+    language: text/javascript
+order: 3000

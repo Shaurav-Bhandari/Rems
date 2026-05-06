@@ -1,0 +1,31 @@
+$kind: collection
+name: ReMS - Restaurant Management System
+variables:
+  - key: baseUrl
+    value: 'http://localhost:8080'
+  - key: accessToken
+    value: ''
+  - key: refreshToken
+    value: ''
+  - key: tenantId
+    value: ''
+  - key: restaurantId
+    value: ''
+  - key: menuCategoryId
+    value: ''
+  - key: menuItemId
+    value: ''
+  - key: orderId
+    value: ''
+  - key: inventoryItemId
+    value: ''
+  - key: userId
+    value: ''
+  - key: sessionId
+    value: ''
+auth:
+  - id: b1e7a7f7-3120-4861-bf62-8e0c51d97180
+    type: bearer
+    name: bearer auth
+    credentials:
+      token: '{{accessToken}}'

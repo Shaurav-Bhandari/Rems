@@ -1,0 +1,49 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/orders/"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "restaurant_id": "{{restaurantId}}",
+      "customer_name": "John Doe",
+      "phone_number": "+9779800000001",
+      "table_id": 1,
+      "order_items": [
+        {
+          "item_name": "Spring Rolls",
+          "quantity": 2,
+          "modifiers": []
+        }
+      ]
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 201", () => pm.response.to.have.status(201));
+      pm.test("Order has order_id", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("order_id");
+      });
+      pm.test("Order has order_status", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("order_status");
+      });
+      pm.test("Order items are present", () => {
+          const json = pm.response.json();
+          pm.expect(json.data.order_items).to.be.an("array").with.length.above(0);
+      });
+      if (pm.response.code === 201) {
+          const json = pm.response.json();
+          if (json.data && json.data.order_id) {
+              pm.collectionVariables.set("orderId", json.data.order_id);
+          }
+      }
+    language: text/javascript
+order: 2000

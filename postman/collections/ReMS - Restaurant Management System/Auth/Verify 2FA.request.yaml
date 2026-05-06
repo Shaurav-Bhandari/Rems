@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/auth/verify-2fa"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "pending_session_id": "REPLACE_WITH_PENDING_SESSION_ID",
+      "code": "123456"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200 or 401", () => {
+          pm.expect([200, 401]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 6000

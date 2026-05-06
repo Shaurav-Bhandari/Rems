@@ -70,7 +70,12 @@ type Order struct {
 	Table               *Table      `gorm:"foreignKey:TableID;constraint:OnDelete:SET NULL" json:"table,omitempty"`
 	Branch              *Branch     `gorm:"foreignKey:BranchID;constraint:OnDelete:SET NULL" json:"branch,omitempty"`
 
+	// Groups enables bill-splitting / round-based ordering within a single table order.
+	// Load with: db.Preload("Groups.Items.Modifiers").First(&order, id)
+	Groups []OrderGroup `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"groups,omitempty"`
+
 	// Items is the has-many collection of line items belonging to this order.
+	// Items may or may not belong to a group (GroupID is nullable).
 	// Load with: db.Preload("Items.Modifiers").First(&order, id)
 	Items []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"items,omitempty"`
 
@@ -100,12 +105,29 @@ func (o *Order) GetTotalAmount() float64 { return o.TotalAmount }
 func (o *Order) GetStatus() string       { return string(o.OrderStatus) }
 func (o *Order) SetStatus(s string)      { o.OrderStatus = OrderItemStatus(s) }
 
+// OrderGroup represents a sub-group within an order. Enables bill-splitting
+// (e.g. "Guest 1", "Guest 2") or round-based ordering ("Round 1", "Round 2").
+// Each OrderItem may optionally belong to a group via its GroupID field.
+type OrderGroup struct {
+	GroupID   uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"group_id"`
+	OrderID   uuid.UUID `gorm:"type:uuid;not null;index" json:"order_id"`
+	GroupName string    `gorm:"type:varchar(255);not null" json:"group_name"` // e.g. "Guest 1", "Round 2"
+	SortOrder int       `gorm:"not null;default:0" json:"sort_order"`
+	Notes     string    `gorm:"type:text" json:"notes"`
+	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
+
+	// Relationships
+	Order Order       `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"-"`
+	Items []OrderItem `gorm:"foreignKey:GroupID;constraint:OnDelete:SET NULL" json:"items,omitempty"`
+}
+
 // OrderItem is a single line item within an Order.
 // One Order contains one or more OrderItems; each OrderItem may have
 // zero or more OrderItemModifiers (e.g. "extra cheese", "no onion").
 type OrderItem struct {
 	OrderItemID uuid.UUID       `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"order_item_id"`
 	OrderID     uuid.UUID       `gorm:"type:uuid;not null;index" json:"order_id"`
+	GroupID     *uuid.UUID      `gorm:"type:uuid;index" json:"group_id,omitempty"` // optional: assigns item to an OrderGroup
 	Status      OrderItemStatus `gorm:"type:varchar(50);not null;default:'pending';index" json:"status"`
 	Quantity    int             `gorm:"not null;default:1" json:"quantity"`
 
@@ -125,6 +147,7 @@ type OrderItem struct {
 
 	// Relationships
 	Order     Order                `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"-"`
+	Group     *OrderGroup          `gorm:"foreignKey:GroupID;constraint:OnDelete:SET NULL" json:"group,omitempty"`
 	MenuItem  *MenuItem            `gorm:"foreignKey:MenuItemID;constraint:OnDelete:SET NULL" json:"menu_item,omitempty"`
 	Modifiers []OrderItemModifier  `gorm:"foreignKey:OrderItemID;constraint:OnDelete:CASCADE" json:"modifiers,omitempty"`
 }
@@ -187,6 +210,13 @@ func (o *Order) BeforeCreate(tx *gorm.DB) error {
 	}
 	if o.OrderStatus == "" {
 		o.OrderStatus = "pending"
+	}
+	return nil
+}
+
+func (og *OrderGroup) BeforeCreate(tx *gorm.DB) error {
+	if og.GroupID == uuid.Nil {
+		og.GroupID = uuid.New()
 	}
 	return nil
 }

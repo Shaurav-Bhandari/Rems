@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/restaurants/{{restaurantId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Updated Restaurant Name",
+      "phone": "+9779876543"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Name was updated", () => {
+          const json = pm.response.json();
+          pm.expect(json.data.name).to.equal("Updated Restaurant Name");
+      });
+    language: text/javascript
+order: 4000

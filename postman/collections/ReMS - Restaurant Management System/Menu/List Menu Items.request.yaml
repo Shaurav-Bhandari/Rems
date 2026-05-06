@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/menu/items"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response has items array", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("items");
+      });
+      if (pm.response.code === 200) {
+          const json = pm.response.json();
+          if (json.data && json.data.items && json.data.items.length > 0) {
+              pm.collectionVariables.set("menuItemId", json.data.items[0].menu_item_id);
+          }
+      }
+    language: text/javascript
+order: 3000

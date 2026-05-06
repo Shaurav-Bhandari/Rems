@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/inventory/{{inventoryItemId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Fresh Tomatoes",
+      "unit_cost": 3.00
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Unit cost updated", () => {
+          const json = pm.response.json();
+          pm.expect(json.data.unit_cost).to.equal(3.00);
+      });
+    language: text/javascript
+order: 4000

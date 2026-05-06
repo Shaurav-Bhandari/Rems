@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "admin@rems-test.com",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "user_name": "adminuser",
+      "password": "TestPass@123",
+      "password_confirm": "TestPass@123",
+      "full_name": "Admin User",
+      "phone": "+9779800000000",
+      "tenant_name": "Test Restaurant Group"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 201", () => pm.response.to.have.status(201));
+      pm.test("Response has user_id", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("user_id");
+      });
+    language: text/javascript
+order: 1000

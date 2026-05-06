@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/inventory/{{inventoryItemId}}/adjust"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 20.0,
+      "reason": "received",
+      "notes": "Weekly delivery from supplier"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Quantity was adjusted", () => {
+          const json = pm.response.json();
+          pm.expect(json.data).to.have.property("current_quantity");
+      });
+    language: text/javascript
+order: 5000
