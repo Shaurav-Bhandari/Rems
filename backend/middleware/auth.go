@@ -213,16 +213,9 @@ func resolveSession(c fiber.Ctx, cfg AuthConfig, claims *JWTClaims) (*DTO.AuthCo
 
 	data, err := cfg.RedisClient.Get(ctx, cacheKey).Bytes()
 	if err == redis.Nil {
-		// Session not in Redis — could be expired or evicted.
-		// Fall back to claims (degraded mode).
-		log.Printf("[WARN] Session %s not found in Redis — using JWT claims only", claims.SessionID)
-		return &DTO.AuthContext{
-			SessionID: claims.SessionID,
-			UserID:    claims.UserID,
-			TenantID:  claims.TenantID,
-			Email:     claims.Email,
-			Role:      claims.Role,
-		}, nil
+		// Session not in Redis — could be expired, evicted, or revoked.
+		// Reject to prevent accepting potentially revoked sessions.
+		return nil, fmt.Errorf("session %s not found — may have been revoked or expired", claims.SessionID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("redis error: %w", err)
