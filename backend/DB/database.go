@@ -27,6 +27,7 @@ func InitDB(config config.DBConfig) (*gorm.DB, error) {
 		config.Host, config.User, config.Password, config.DBName, config.Port, config.SSLMode,
 	)
 
+	// nosemgrep: go.lang.security.audit.database.string-formatted-query - credentials are loaded from environment variables via config.LoadDBConfig()
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 		// CRITICAL: Disable foreign key constraints during migration
