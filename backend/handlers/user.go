@@ -58,6 +58,10 @@ func (h *UserHandler) Get(c fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, "Not authenticated", nil)
 	}
 
+	if err := auth.CanManageUsers(); err != nil {
+		return utils.SendResponse(c, fiber.StatusForbidden, err.Error(), nil)
+	}
+
 	id := c.Params("id")
 	var user map[string]interface{}
 
