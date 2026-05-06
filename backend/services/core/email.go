@@ -193,6 +193,7 @@ func (e *EmailService) send(to, subject, htmlBody string) error {
 func (e *EmailService) sendTLS(addr string, auth smtp.Auth, to, msg string) error {
 	tlsConfig := &tls.Config{
 		ServerName: e.host,
+		MinVersion: tls.VersionTLS13,
 	}
 
 	conn, err := tls.Dial("tcp", addr, tlsConfig)
