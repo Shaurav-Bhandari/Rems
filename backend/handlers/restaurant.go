@@ -103,6 +103,15 @@ func (h *RestaurantHandler) Update(c fiber.Ctx) error {
 
 	id := c.Params("id")
 
+	restaurantID, err := uuid.Parse(id)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "Invalid restaurant ID", nil)
+	}
+
+	if err := auth.CanUpdateRestaurant(restaurantID); err != nil {
+		return utils.SendResponse(c, fiber.StatusForbidden, err.Error(), nil)
+	}
+
 	var body map[string]interface{}
 	if err := c.Bind().JSON(&body); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, "Invalid request body", nil)
